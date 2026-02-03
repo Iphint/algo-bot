@@ -1,0 +1,38 @@
+# ======================
+# Environment Variables
+# ======================
+.env
+.env.*
+
+# ======================
+# Google Credentials
+# ======================
+credentials.json
+credentials*.json
+
+# ======================
+# Python Cache
+# ======================
+__pycache__/
+*.py[cod]
+
+# ======================
+# Virtual Environment
+# ======================
+venv/
+.venv/
+env/
+
+# ======================
+# OS / Editor Files
+# ======================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ======================
+# Logs (optional)
+# ======================
+logs/
+*.log
