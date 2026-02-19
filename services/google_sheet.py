@@ -1,10 +1,16 @@
 from datetime import datetime
+import json
+import os
+from dotenv import load_dotenv # type: ignore
 from google.oauth2 import service_account # type: ignore
 from googleapiclient.discovery import build # type: ignore
 from config import SCOPES, SPREADSHEET_ID, STUDENT_SHEET, LOG_SHEET
 
-creds = service_account.Credentials.from_service_account_file(
-    "credentials.json", scopes=SCOPES
+load_dotenv()
+
+credentials_info = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
+creds = service_account.Credentials.from_service_account_info(
+    credentials_info, scopes=SCOPES
 )
 
 service = build("sheets", "v4", credentials=creds)
