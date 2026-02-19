@@ -1,4 +1,4 @@
-import discord
+import discord # type: ignore
 from discord_bot.bot import bot
 from services.google_sheet import (
     get_student_by_username_password,

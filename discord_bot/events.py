@@ -1,4 +1,4 @@
-import discord
+import discord # type: ignore
 from discord_bot.bot import bot
 from services.google_sheet import sheet
 from config import SPREADSHEET_ID, LOG_SHEET

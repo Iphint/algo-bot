@@ -1,4 +1,4 @@
-import discord
+import discord # type: ignore
 from config import COURSE_ROLE_MAP
 
 async def assign_course_role(member, course_name):
