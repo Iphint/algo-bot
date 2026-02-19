@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+import base64
 import os
 from dotenv import load_dotenv # type: ignore
 from google.oauth2 import service_account # type: ignore
@@ -8,7 +9,7 @@ from config import SCOPES, SPREADSHEET_ID, STUDENT_SHEET, LOG_SHEET
 
 load_dotenv()
 
-credentials_info = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
+credentials_info = json.loads(base64.b64decode(os.getenv("GOOGLE_CREDENTIALS_B64")))
 creds = service_account.Credentials.from_service_account_info(
     credentials_info, scopes=SCOPES
 )
