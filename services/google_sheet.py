@@ -10,6 +10,7 @@ from config import SCOPES, SPREADSHEET_ID, STUDENT_SHEET, LOG_SHEET
 load_dotenv()
 
 credentials_info = json.loads(base64.b64decode(os.getenv("GOOGLE_CREDENTIALS_B64")))
+credentials_info["private_key"] = credentials_info["private_key"].replace("\\n", "\n")
 creds = service_account.Credentials.from_service_account_info(
     credentials_info, scopes=SCOPES
 )
