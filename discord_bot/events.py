@@ -9,10 +9,35 @@ async def on_ready():
 
 @bot.event
 async def on_member_join(member):
+    guild = member.guild
+
+    # kasih role Unverified otomatis
+    unverified_role = discord.utils.get(guild.roles, name="Unverified")
+    if unverified_role:
+        await member.add_roles(unverified_role)
+
+    # cek apakah sudah pernah verified
+    from services.google_sheet import get_user_log_status
+
+    if get_user_log_status(member.id) == "ACTIVE":
+        from services.google_sheet import get_student_by_discord_id
+        student = get_student_by_discord_id(member.id)
+
+        if student:
+            verified_role = discord.utils.get(guild.roles, name="Verified")
+            if verified_role:
+                await member.add_roles(verified_role)
+
+            from discord_bot.roles import assign_course_role
+            await assign_course_role(member, student["course"])
+
+            if unverified_role:
+                await member.remove_roles(unverified_role)
+
     try:
         await member.send(
             "👋 Selamat datang!\n\n"
-            "Verifikasi via DM:\n"
+            "Silakan verifikasi:\n"
             "`!verify username password`"
         )
     except:
