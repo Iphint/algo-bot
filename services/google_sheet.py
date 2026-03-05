@@ -1,16 +1,48 @@
 from datetime import datetime
-from dotenv import load_dotenv # type: ignore
 from google.oauth2 import service_account # type: ignore
 from googleapiclient.discovery import build # type: ignore
 from config import SCOPES, SPREADSHEET_ID, STUDENT_SHEET, LOG_SHEET
 
 creds = service_account.Credentials.from_service_account_file(
-    "credentials.json",
+    "creds.json",
     scopes=SCOPES
 )
 
 service = build("sheets", "v4", credentials=creds)
 sheet = service.spreadsheets()
+
+user_row_cache = {}
+
+def update_status_by_discord_id(discord_id, new_status):
+    global user_row_cache
+    if discord_id not in user_row_cache:
+        print("ID tidak ada di cache, scanning sekali...")
+        res = sheet.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{LOG_SHEET}!A:G"
+        ).execute()
+
+        rows = res.get("values", [])
+
+        for index, row in enumerate(rows[1:], start=2):
+            if len(row) > 3 and str(row[3]).strip() == str(discord_id):
+                user_row_cache[discord_id] = index
+                break
+        else:
+            print("❌ ID tidak ditemukan di sheet")
+            return False
+
+    row_number = user_row_cache[discord_id]
+
+    sheet.values().update(
+        spreadsheetId=SPREADSHEET_ID,
+        range=f"{LOG_SHEET}!G{row_number}",
+        valueInputOption="RAW",
+        body={"values": [[new_status]]}
+    ).execute()
+
+    print(f"✅ Status updated to {new_status} (fast mode)")
+    return True
 
 def get_student_by_username_password(username, password):
     res = sheet.values().get(
