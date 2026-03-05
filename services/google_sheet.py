@@ -4,7 +4,7 @@ from googleapiclient.discovery import build # type: ignore
 from config import SCOPES, SPREADSHEET_ID, STUDENT_SHEET, LOG_SHEET
 
 creds = service_account.Credentials.from_service_account_file(
-    "creds.json",
+    "credentials.json",
     scopes=SCOPES
 )
 
