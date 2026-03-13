@@ -1,6 +1,6 @@
-import discord
+import discord # type: ignore
 import asyncio
-from discord.ui import Modal, TextInput, View, Button
+from discord.ui import Modal, TextInput, View, Button # type: ignore
 from services.google_sheet import (
     get_student_by_username_password,
     get_user_log_status,

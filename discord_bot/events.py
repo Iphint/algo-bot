@@ -1,4 +1,4 @@
-import discord
+import discord # type: ignore
 from discord_bot.bot import bot
 from services.google_sheet import update_status_by_discord_id
 from discord_bot.verify_ui import VerifyView
