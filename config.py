@@ -14,8 +14,8 @@ intents.message_content = True
 
 # Google Sheet
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-STUDENT_SHEET = "students"
-LOG_SHEET = "discord_log"
+STUDENT_SHEET = "data"
+LOG_SHEET = "log"
 
 # Course → Role map
 COURSE_ROLE_MAP = {
