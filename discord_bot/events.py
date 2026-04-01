@@ -68,8 +68,8 @@ async def check_pending_intro():
             if data["replied"]:
                 continue
 
-            # if now - data["time"] > timedelta(hours=24):
-            if now - data["time"] > timedelta(minutes=1):
+            if now - data["time"] > timedelta(hours=24):
+            # if now - data["time"] > timedelta(minutes=1):
                 user = await bot.fetch_user(user_id)
                 moderator = await bot.fetch_user(MODERATOR_ID)
 
@@ -88,8 +88,8 @@ async def check_pending_intro():
                 # biar gak spam
                 pending_intro[user_id]["replied"] = True
 
-        # await asyncio.sleep(600)  # cek tiap 10 menit
-        await asyncio.sleep(20)  # cek tiap 20 detik
+        await asyncio.sleep(600)  # cek tiap 10 menit
+        # await asyncio.sleep(20)  # cek tiap 20 detik
 
 @bot.event
 async def on_member_remove(member: discord.Member):
