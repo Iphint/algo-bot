@@ -20,7 +20,7 @@ LOG_SHEET = "discord_log"
 # Course → Role map
 COURSE_ROLE_MAP = {
     "rb": "Roblox",
-    "ps": "Python Scratch",
+    "ps": "🐍 Python Student",
     "pp": "Python",
     "vp": "Visual Programming"
 }
