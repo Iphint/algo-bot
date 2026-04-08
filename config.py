@@ -24,3 +24,8 @@ COURSE_ROLE_MAP = {
     "pp": "Python",
     "vp": "Visual Programming"
 }
+
+COURSE_SHEET_MAP = {
+    "ps": "ps",           
+    "default": "students"
+}

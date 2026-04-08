@@ -1,7 +1,7 @@
 from datetime import datetime
 from google.oauth2 import service_account # type: ignore
 from googleapiclient.discovery import build # type: ignore
-from config import SCOPES, SPREADSHEET_ID, STUDENT_SHEET, LOG_SHEET
+from config import SCOPES, SPREADSHEET_ID, STUDENT_SHEET, LOG_SHEET, COURSE_SHEET_MAP
 
 creds = service_account.Credentials.from_service_account_file(
     "credentials.json",
@@ -44,13 +44,16 @@ def update_status_by_discord_id(discord_id, new_status):
     print(f"✅ Status updated to {new_status} (fast mode)")
     return True
 
-def get_student_by_username_password(username, password):
+def find_student_in_sheet(sheet_name, username, password):
     res = sheet.values().get(
         spreadsheetId=SPREADSHEET_ID,
-        range=f"{STUDENT_SHEET}!A:Z"
+        range=f"{sheet_name}!A:Z"
     ).execute()
 
     rows = res.get("values", [])
+    if not rows:
+        return None
+
     headers = rows[0]
 
     for row in rows[1:]:
@@ -63,9 +66,22 @@ def get_student_by_username_password(username, password):
                 "student_id": data.get("student_id"),
                 "username": data.get("username"),
                 "password": data.get("password"),
-                "course": data.get("Course", "").lower().strip()
+                "course": data.get("Course", "").lower().strip(),
+                "source_sheet": sheet_name
             }
     return None
+
+def get_student_by_username_password(username, password):
+    # 1. cek PS dulu (prioritas)
+    ps_sheet = COURSE_SHEET_MAP.get("ps")
+    student = find_student_in_sheet(ps_sheet, username, password)
+
+    if student:
+        return student
+
+    # 2. fallback ke default (students)
+    default_sheet = COURSE_SHEET_MAP.get("default")
+    return find_student_in_sheet(default_sheet, username, password)
 
 
 def get_user_log_status(discord_id):
