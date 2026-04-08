@@ -18,12 +18,12 @@ STUDENT_SHEET = "students"
 LOG_SHEET = "discord_log"
 
 # Course → Role map
-COURSE_ROLE_MAP = {
-    "rb": "Roblox",
-    "ps": "🐍 Python Student",
-    "pp": "Python",
-    "vp": "Visual Programming"
-}
+COURSE_ROLE_MAP = [
+    ("python pro", "🐍 Python Student"),
+    ("python start", "🐍 Python Student"),
+    ("roblox", "Roblox"),
+    ("visual", "Visual Programming"),
+]
 
 COURSE_SHEET_MAP = {
     "ps": "ps",           
