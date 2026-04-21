@@ -7,6 +7,7 @@ from services.google_sheet import (
     log_discord_join
 )
 from discord_bot.roles import assign_course_role
+from discord_bot.python_welcome_templates import get_python_welcome
 
 
 class VerifyModal(Modal, title="🎓 Verifikasi Akun Algonova"):
@@ -68,8 +69,26 @@ class VerifyModal(Modal, title="🎓 Verifikasi Akun Algonova"):
             await member.remove_roles(unverified_role)
 
         # Assign role sesuai course
-        await assign_course_role(member, student["course"])
+        assigned_role = await assign_course_role(member, student["course"])
 
+        # 🔥 Python Student Welcome Message
+        if assigned_role and assigned_role.name == "🐍 Python Student":
+            guild = interaction.guild
+            target_channel = None
+            for channel in guild.text_channels:
+                if (
+                    channel.name == "💬︱general-chat"
+                    and channel.category
+                    and channel.category.name == "══ 🎓 PYTHON LOUNGE ══"
+                ):
+                    target_channel = channel
+                    break
+
+            if target_channel:
+                message = get_python_welcome(member.mention)
+                await target_channel.send(message)
+
+        # ✅ Tetap kirim response ke user
         await interaction.followup.send(
             f"🎉 **Verifikasi berhasil! Selamat datang di Algonova!**\n\n"
             f"📘 Course kamu: **{student['course']}**\n"
