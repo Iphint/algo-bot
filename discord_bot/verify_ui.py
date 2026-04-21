@@ -59,11 +59,11 @@ class VerifyModal(Modal, title="🎓 Verifikasi Akun Algonova"):
         await loop.run_in_executor(None, log_discord_join, student, member)
 
         # Tambah role Verified, hapus role Unverified
-        verified_role = discord.utils.get(guild.roles, name="Verified")
+        verified_role = discord.utils.get(guild.roles, name="🏅 | Verified Student")
         if verified_role:
             await member.add_roles(verified_role)
 
-        unverified_role = discord.utils.get(guild.roles, name="Unverified")
+        unverified_role = discord.utils.get(guild.roles, name="Unverified Student")
         if unverified_role:
             await member.remove_roles(unverified_role)
 
