@@ -55,6 +55,7 @@ async def progress(ctx, *, args):
         await ctx.send("❌ Gunakan command ini di server.")
         return
 
+    # 🔍 PARSING
     try:
         match = re.search(r"tgl (\d+) bulan (\d+) tahun (\d+)", args)
         if not match:
@@ -62,11 +63,12 @@ async def progress(ctx, *, args):
 
         day, month, year = map(int, match.groups())
 
-        WIB = timezone(timedelta(hours=7))
-        target_date = datetime(year, month, day, tzinfo=WIB)
+        # ⚠️ FIX: pakai UTC tanpa timezone biar gak miss data
+        target_date = datetime(year, month, day)
         next_day = target_date + timedelta(days=1)
 
-    except:
+    except Exception as e:
+        print("❌ Parsing error:", e)
         await ctx.send("❌ Format salah!\n`!progress tgl 27 bulan 4 tahun 2026`")
         return
 
@@ -74,7 +76,8 @@ async def progress(ctx, *, args):
 
     guild = ctx.guild
 
-    TEXT_CHANNELS = [
+    # 🎯 CHANNEL FILTER (SAFE FUZZY MATCH)
+    KEYWORDS = [
         "global-chat",
         "showcase",
         "competition",
@@ -89,11 +92,19 @@ async def progress(ctx, *, args):
     active_users = set()
 
     for channel in guild.text_channels:
-        if channel.name not in TEXT_CHANNELS:
+        name = channel.name.lower()
+
+        if not any(k in name for k in KEYWORDS):
             continue
 
+        print(f"🔍 scanning channel: {channel.name}")
+
         try:
-            async for message in channel.history(limit=None, after=target_date, before=next_day):
+            async for message in channel.history(
+                limit=None,
+                after=target_date,
+                before=next_day
+            ):
                 if message.author.bot:
                     continue
 
@@ -101,18 +112,17 @@ async def progress(ctx, *, args):
                 active_users.add(message.author.id)
 
         except Exception as e:
-            print(f"Error {channel.name}:", e)
+            print(f"❌ error {channel.name}: {e}")
 
     # 🔊 VOICE DATA
     voice_users = 0
     voice_events = 0
 
-    target_day = target_date.date()
+    if target_date.date() in voice_activity:
+        voice_users = len(voice_activity[target_date.date()]["users"])
+        voice_events = voice_activity[target_date.date()]["events"]
 
-    if target_day in voice_activity:
-        voice_users = len(voice_activity[target_day]["users"])
-        voice_events = voice_activity[target_day]["events"]
-
+    # 📊 RESULT
     result = (
         f"📊 **Progress Komunitas**\n\n"
         f"📅 {day}-{month}-{year}\n\n"
@@ -129,6 +139,7 @@ async def progress(ctx, *, args):
         f"{round(total_messages / len(active_users), 2) if active_users else 0}"
     )
 
+    # 📤 SEND TO CHANNELS
     progress_channel = discord.utils.get(guild.text_channels, name="progress")
     log_channel = discord.utils.get(guild.text_channels, name="logs")
 
@@ -143,12 +154,4 @@ async def progress(ctx, *, args):
             f"📅 {day}-{month}-{year}"
         )
 
-    await ctx.send("✅ Report dikirim ke #progress")
-
-
-@progress.error
-async def progress_error(ctx, error):
-    from discord.ext import commands
-
-    if isinstance(error, commands.MissingAnyRole):
-        await ctx.send("❌ Hanya Moderator/Admin yang bisa pakai command ini.")
+    await ctx.send("✅ Report berhasil dikirim!")
