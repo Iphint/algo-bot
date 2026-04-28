@@ -3,10 +3,19 @@ from discord_bot.bot import bot
 from services.google_sheet import update_status_by_discord_id
 from discord_bot.verify_ui import VerifyView
 from discord_bot.templates import get_random_intro
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 
 pending_intro = {}
+# 🔊 voice tracker
+voice_activity = {}
+WIB = timezone(timedelta(hours=7))
+
+VOICE_CHANNEL_NAMES = [
+    "🌐 | ALGO ON-AIR",
+    "🎵︱Chill - Music",
+    "🎮︱Chill - Gaming"
+]
 
 @bot.event
 async def on_ready():
@@ -42,19 +51,35 @@ async def on_member_join(member):
 
 @bot.event
 async def on_message(message):
+    # skip bot
     if message.author.bot:
         return
-
-    channel_name = message.channel.name
-
-    if channel_name == "kenalan-dulu":
-        user_id = message.author.id
-
-        if user_id in pending_intro:
-            pending_intro[user_id]["replied"] = True
-            print(f"✅ {message.author} sudah intro")
+    print("📩 Message:", message.content)
+    if message.guild is not None:
+        if hasattr(message.channel, "name") and message.channel.name == "kenalan-dulu":
+            user_id = message.author.id
+            if user_id in pending_intro:
+                pending_intro[user_id]["replied"] = True
+                print(f"✅ {message.author} sudah intro")
 
     await bot.process_commands(message)
+
+# 🔊 TRACK VOICE
+@bot.event
+async def on_voice_state_update(member, before, after):
+    now = datetime.now(WIB).date()
+
+    if now not in voice_activity:
+        voice_activity[now] = {
+            "users": set(),
+            "events": 0
+        }
+
+    if before.channel != after.channel:
+        if after.channel and after.channel.name in VOICE_CHANNEL_NAMES:
+            voice_activity[now]["events"] += 1
+            voice_activity[now]["users"].add(member.id)
+
 
 async def check_pending_intro():
     await bot.wait_until_ready()
