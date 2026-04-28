@@ -54,7 +54,9 @@ async def progress(ctx, *, args):
         await ctx.send("❌ Gunakan command ini di server.")
         return
 
+    # =========================
     # 🔍 PARSE INPUT
+    # =========================
     try:
         match = re.search(r"tgl (\d+) bulan (\d+) tahun (\d+)", args)
         if not match:
@@ -62,7 +64,6 @@ async def progress(ctx, *, args):
 
         day, month, year = map(int, match.groups())
 
-        # ⚠️ FIX: pakai naive datetime (biar Discord history aman)
         target_date = datetime(year, month, day)
         next_day = target_date + timedelta(days=1)
 
@@ -71,11 +72,13 @@ async def progress(ctx, *, args):
         await ctx.send("❌ Format salah!\n`!progress tgl 27 bulan 4 tahun 2026`")
         return
 
-    await ctx.send("⏳ Menghitung data...")
+    await ctx.send("⏳ Menghitung data komunitas...")
 
     guild = ctx.guild
 
-    # 🎯 CHANNEL YANG DI SCAN
+    # =========================
+    # 🎯 CHANNEL FILTER
+    # =========================
     KEYWORDS = [
         "global-chat",
         "showcase",
@@ -90,11 +93,9 @@ async def progress(ctx, *, args):
     total_messages = 0
     active_users = set()
 
-    # 🔍 SCAN ALL CHANNELS
     for channel in guild.text_channels:
         name = channel.name.lower()
 
-        # fuzzy match biar aman dari emoji / formatting
         if not any(k in name for k in KEYWORDS):
             continue
 
@@ -115,20 +116,37 @@ async def progress(ctx, *, args):
         except Exception as e:
             print(f"❌ error {channel.name}: {e}")
 
-    # 📊 RESULT
+    engagement = round(total_messages / len(active_users), 2) if active_users else 0
+
+    if engagement <= 2:
+        engagement_label = "🔴 LOW (Komunitas sepi)"
+    elif engagement <= 7:
+        engagement_label = "🟡 MEDIUM (Cukup aktif)"
+    else:
+        engagement_label = "🟢 HIGH (Komunitas sangat aktif)"
+
+    engagement_score = min(100, int(engagement * 10))
+
+    # =========================
+    # 📊 FINAL RESULT
+    # =========================
     result = (
         f"📊 **Progress Komunitas**\n\n"
         f"📅 {day}-{month}-{year}\n\n"
 
-        f"📝 Text Activity\n"
+        f"📝 **Text Activity**\n"
         f"👥 User aktif: {len(active_users)}\n"
         f"💬 Total pesan: {total_messages}\n\n"
 
-        f"🔥 Engagement rate: "
-        f"{round(total_messages / len(active_users), 2) if active_users else 0}"
+        f"📈 **Engagement Analysis**\n"
+        f"🔥 Engagement rate: {engagement}\n"
+        f"📊 Status: {engagement_label}\n"
+        f"📊 Health Score: {engagement_score}/100\n\n"
+
+        f"✨ **Summary**\n"
+        f"➡️ Rata-rata interaksi per user: {engagement} pesan/user\n"
     )
 
-    # 📤 SEND TO CHANNELS
     progress_channel = discord.utils.get(guild.text_channels, name="progress")
     log_channel = discord.utils.get(guild.text_channels, name="logs")
 
@@ -140,7 +158,8 @@ async def progress(ctx, *, args):
     if log_channel:
         await log_channel.send(
             f"📌 {ctx.author.mention} menjalankan progress\n"
-            f"📅 {day}-{month}-{year}"
+            f"📅 {day}-{month}-{year}\n"
+            f"🔥 Score: {engagement_score}/100"
         )
 
-    await ctx.send("✅ Report berhasil dikirim!")
+    await ctx.send("✅ Report berhasil dikirim ke #progress")
