@@ -47,6 +47,126 @@ async def sendverify(ctx):
 
 @bot.command()
 @commands.has_any_role("Moderator", "Administrator")
+async def progress_range(ctx, *, args):
+    print("🔥 RANGE PROGRESS TRIGGERED")
+
+    if not ctx.guild:
+        await ctx.send("❌ Gunakan command ini di server.")
+        return
+    
+    try:
+        match = re.search(
+            r"tgl (\d+) bulan (\d+) tahun (\d+) sampai tgl (\d+) bulan (\d+) tahun (\d+)",
+            args
+        )
+
+        if not match:
+            raise ValueError("Format salah")
+
+        d1, m1, y1, d2, m2, y2 = map(int, match.groups())
+
+        start_date = datetime(y1, m1, d1)
+        end_date = datetime(y2, m2, d2) + timedelta(days=1)
+
+    except Exception as e:
+        print("❌ Parsing error:", e)
+        await ctx.send(
+            "❌ Format salah!\n"
+            "`!progress_range tgl 21 bulan 4 tahun 2026 sampai tgl 25 bulan 4 tahun 2026`"
+        )
+        return
+
+    await ctx.send("⏳ Menghitung range data...")
+
+    guild = ctx.guild
+
+    KEYWORDS = [
+        "global-chat",
+        "showcase",
+        "competition",
+        "meme-corner",
+        "main-chat",
+        "weekly-quest",
+        "fun-activity",
+        "kenalan-dulu"
+    ]
+
+    total_messages = 0
+    active_users = set()
+
+    # =========================
+    # 🔍 SCAN RANGE
+    # =========================
+    for channel in guild.text_channels:
+        name = channel.name.lower()
+
+        if not any(k in name for k in KEYWORDS):
+            continue
+
+        print(f"🔍 scanning: {channel.name}")
+
+        try:
+            async for message in channel.history(
+                limit=None,
+                after=start_date,
+                before=end_date
+            ):
+                if message.author.bot:
+                    continue
+
+                total_messages += 1
+                active_users.add(message.author.id)
+
+        except Exception as e:
+            print(f"❌ error {channel.name}: {e}")
+
+    engagement = round(total_messages / len(active_users), 2) if active_users else 0
+
+    if engagement <= 2:
+        engagement_label = "🔴 LOW (Komunitas sepi)"
+    elif engagement <= 7:
+        engagement_label = "🟡 MEDIUM (Cukup aktif)"
+    else:
+        engagement_label = "🟢 HIGH (Komunitas sangat aktif)"
+
+    engagement_score = min(100, int(engagement * 10))
+
+    result = (
+        f"📊 **Progress Range Komunitas**\n\n"
+        f"📅 {d1}-{m1}-{y1} ➜ {d2}-{m2}-{y2}\n\n"
+
+        f"📝 Text Activity\n"
+        f"👥 User aktif: {len(active_users)}\n"
+        f"💬 Total pesan: {total_messages}\n\n"
+
+        f"📈 Engagement Analysis\n"
+        f"🔥 Engagement rate: {engagement}\n"
+        f"📊 Status: {engagement_label}\n"
+        f"📊 Health Score: {engagement_score}/100\n\n"
+
+        f"✨ Summary\n"
+        f"➡️ Rata-rata interaksi per user: {engagement} pesan/user\n"
+    )
+
+    progress_channel = discord.utils.get(guild.text_channels, name="progress")
+    log_channel = discord.utils.get(guild.text_channels, name="logs")
+
+    if progress_channel:
+        await progress_channel.send(result)
+    else:
+        await ctx.send("❌ Channel #progress tidak ditemukan.")
+
+    if log_channel:
+        await log_channel.send(
+            f"📌 {ctx.author.mention} menjalankan progress range\n"
+            f"📅 {d1}-{m1}-{y1} ➜ {d2}-{m2}-{y2}\n"
+            f"🔥 Score: {engagement_score}/100"
+        )
+
+    await ctx.send("✅ Report range berhasil dikirim!")
+
+@bot.command()
+@commands.has_any_role("Moderator", "Administrator")
 async def progress(ctx, *, args):
     print("🔥 PROGRESS COMMAND TRIGGERED")
 
