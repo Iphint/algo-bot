@@ -6,7 +6,6 @@ from services.google_sheet import (
 )
 import re
 from datetime import datetime, timedelta, timezone
-from discord_bot.events import voice_activity
 
 @bot.command()
 async def test(ctx):
@@ -55,7 +54,7 @@ async def progress(ctx, *, args):
         await ctx.send("❌ Gunakan command ini di server.")
         return
 
-    # 🔍 PARSING
+    # 🔍 PARSE INPUT
     try:
         match = re.search(r"tgl (\d+) bulan (\d+) tahun (\d+)", args)
         if not match:
@@ -63,7 +62,7 @@ async def progress(ctx, *, args):
 
         day, month, year = map(int, match.groups())
 
-        # ⚠️ FIX: pakai UTC tanpa timezone biar gak miss data
+        # ⚠️ FIX: pakai naive datetime (biar Discord history aman)
         target_date = datetime(year, month, day)
         next_day = target_date + timedelta(days=1)
 
@@ -76,7 +75,7 @@ async def progress(ctx, *, args):
 
     guild = ctx.guild
 
-    # 🎯 CHANNEL FILTER (SAFE FUZZY MATCH)
+    # 🎯 CHANNEL YANG DI SCAN
     KEYWORDS = [
         "global-chat",
         "showcase",
@@ -91,13 +90,15 @@ async def progress(ctx, *, args):
     total_messages = 0
     active_users = set()
 
+    # 🔍 SCAN ALL CHANNELS
     for channel in guild.text_channels:
         name = channel.name.lower()
 
+        # fuzzy match biar aman dari emoji / formatting
         if not any(k in name for k in KEYWORDS):
             continue
 
-        print(f"🔍 scanning channel: {channel.name}")
+        print(f"🔍 scanning: {channel.name}")
 
         try:
             async for message in channel.history(
@@ -114,14 +115,6 @@ async def progress(ctx, *, args):
         except Exception as e:
             print(f"❌ error {channel.name}: {e}")
 
-    # 🔊 VOICE DATA
-    voice_users = 0
-    voice_events = 0
-
-    if target_date.date() in voice_activity:
-        voice_users = len(voice_activity[target_date.date()]["users"])
-        voice_events = voice_activity[target_date.date()]["events"]
-
     # 📊 RESULT
     result = (
         f"📊 **Progress Komunitas**\n\n"
@@ -131,11 +124,7 @@ async def progress(ctx, *, args):
         f"👥 User aktif: {len(active_users)}\n"
         f"💬 Total pesan: {total_messages}\n\n"
 
-        f"🔊 Voice Activity\n"
-        f"👥 User join: {voice_users}\n"
-        f"🔁 Event: {voice_events}\n\n"
-
-        f"🔥 Engagement: "
+        f"🔥 Engagement rate: "
         f"{round(total_messages / len(active_users), 2) if active_users else 0}"
     )
 
