@@ -7,76 +7,6 @@ from services.google_sheet import (
 import re
 from datetime import datetime, timedelta, timezone
 
-def calculate_metrics(guild, start_date, end_date):
-
-    KEYWORDS = [
-        "global-chat",
-        "showcase",
-        "competition",
-        "meme-corner",
-        "main-chat",
-        "weekly-quest",
-        "fun-activity",
-        "kenalan-dulu"
-    ]
-
-    two_months_ago = end_date - timedelta(days=60)
-
-    total_messages = 0
-    active_users = set()
-    online_users = set()
-    last_seen = {}
-
-    for channel in guild.text_channels:
-        name = channel.name.lower()
-
-        if not any(k in name for k in KEYWORDS):
-            continue
-
-        try:
-            async def scan():
-                async for msg in channel.history(
-                    limit=None,
-                    after=two_months_ago,
-                    before=end_date
-                ):
-                    if msg.author.bot:
-                        continue
-
-                    uid = msg.author.id
-
-                    if start_date <= msg.created_at.replace(tzinfo=None) <= end_date:
-                        active_users.add(uid)
-
-                    online_users.add(uid)
-
-                    total_messages += 1
-                    last_seen[uid] = msg.created_at
-
-            import asyncio
-            asyncio.run(scan())
-
-        except Exception as e:
-            print(f"Error {channel.name}: {e}")
-
-    valid_online_users = len(online_users)
-
-    engagement_depth = round(
-        total_messages / len(active_users), 2
-    ) if active_users else 0
-
-    engagement_rate = round(
-        len(active_users) / valid_online_users, 2
-    ) if valid_online_users else 0
-
-    return {
-        "total_messages": total_messages,
-        "active_users": len(active_users),
-        "online_users": valid_online_users,
-        "engagement_depth": engagement_depth,
-        "engagement_rate": engagement_rate
-    }
-
 @bot.command()
 async def test(ctx):
     print("TEST COMMAND CALLED")
@@ -118,11 +48,12 @@ async def sendverify(ctx):
 @bot.command()
 @commands.has_any_role("Moderator", "Administrator")
 async def progress_range(ctx, *, args):
+    print("🔥 RANGE PROGRESS TRIGGERED")
 
     if not ctx.guild:
-        await ctx.send("❌ Gunakan di server.")
+        await ctx.send("❌ Gunakan command ini di server.")
         return
-
+    
     try:
         match = re.search(
             r"tgl (\d+) bulan (\d+) tahun (\d+) sampai tgl (\d+) bulan (\d+) tahun (\d+)",
@@ -130,107 +61,225 @@ async def progress_range(ctx, *, args):
         )
 
         if not match:
-            raise ValueError()
+            raise ValueError("Format salah")
 
         d1, m1, y1, d2, m2, y2 = map(int, match.groups())
 
         start_date = datetime(y1, m1, d1)
         end_date = datetime(y2, m2, d2) + timedelta(days=1)
 
-    except:
-        await ctx.send("❌ Format range salah")
+    except Exception as e:
+        print("❌ Parsing error:", e)
+        await ctx.send(
+            "❌ Format salah!\n"
+            "`!progress_range tgl 21 bulan 4 tahun 2026 sampai tgl 25 bulan 4 tahun 2026`"
+        )
         return
 
-    await ctx.send("⏳ Menghitung range...")
+    await ctx.send("⏳ Menghitung range data...")
 
-    data = calculate_metrics(ctx.guild, start_date, end_date)
+    guild = ctx.guild
+
+    KEYWORDS = [
+        "global-chat",
+        "showcase",
+        "competition",
+        "meme-corner",
+        "main-chat",
+        "weekly-quest",
+        "fun-activity",
+        "kenalan-dulu"
+    ]
+
+    total_messages = 0
+    active_users = set()
+
+    # =========================
+    # 🔍 SCAN RANGE
+    # =========================
+    for channel in guild.text_channels:
+        name = channel.name.lower()
+
+        if not any(k in name for k in KEYWORDS):
+            continue
+
+        print(f"🔍 scanning: {channel.name}")
+
+        try:
+            async for message in channel.history(
+                limit=None,
+                after=start_date,
+                before=end_date
+            ):
+                if message.author.bot:
+                    continue
+
+                total_messages += 1
+                active_users.add(message.author.id)
+
+        except Exception as e:
+            print(f"❌ error {channel.name}: {e}")
+
+    engagement = round(total_messages / len(active_users), 2) if active_users else 0
+
+    if engagement <= 2:
+        engagement_label = "🔴 LOW (Komunitas sepi)"
+    elif engagement <= 7:
+        engagement_label = "🟡 MEDIUM (Cukup aktif)"
+    else:
+        engagement_label = "🟢 HIGH (Komunitas sangat aktif)"
+
+    engagement_score = min(100, int(engagement * 10))
 
     result = (
-        f"📊 **Community Range Report**\n\n"
+        f"📊 **Progress Range Komunitas**\n\n"
         f"📅 {d1}-{m1}-{y1} ➜ {d2}-{m2}-{y2}\n\n"
 
         f"📝 Text Activity\n"
-        f"👥 Active Users: {data['active_users']}\n"
-        f"👤 Online Users (60d): {data['online_users']}\n"
-        f"💬 Total Chats: {data['total_messages']}\n\n"
+        f"👥 User aktif: {len(active_users)}\n"
+        f"💬 Total pesan: {total_messages}\n\n"
 
-        f"🔥 Engagement Depth\n"
-        f"{data['engagement_depth']} chat/user\n\n"
+        f"📈 Engagement Analysis\n"
+        f"🔥 Engagement rate: {engagement}\n"
+        f"📊 Status: {engagement_label}\n"
+        f"📊 Health Score: {engagement_score}/100\n\n"
 
-        f"📊 Engagement Rate\n"
-        f"{data['engagement_rate']}\n\n"
-
-        f"⚠️ Inactive (>60 hari) excluded"
+        f"✨ Summary\n"
+        f"➡️ Rata-rata interaksi per user: {engagement} pesan/user\n"
     )
 
-    progress_channel = discord.utils.get(ctx.guild.text_channels, name="progress")
-    log_channel = discord.utils.get(ctx.guild.text_channels, name="logs")
+    progress_channel = discord.utils.get(guild.text_channels, name="progress")
+    log_channel = discord.utils.get(guild.text_channels, name="logs")
 
     if progress_channel:
         await progress_channel.send(result)
+    else:
+        await ctx.send("❌ Channel #progress tidak ditemukan.")
 
     if log_channel:
         await log_channel.send(
-            f"📌 {ctx.author.mention} range report\n"
-            f"📅 {d1}-{m1}-{y1} ➜ {d2}-{m2}-{y2}"
+            f"📌 {ctx.author.mention} menjalankan progress range\n"
+            f"📅 {d1}-{m1}-{y1} ➜ {d2}-{m2}-{y2}\n"
+            f"🔥 Score: {engagement_score}/100"
         )
 
-    await ctx.send("✅ Range report terkirim!")
+    await ctx.send("✅ Report range berhasil dikirim!")
 
 @bot.command()
 @commands.has_any_role("Moderator", "Administrator")
 async def progress(ctx, *, args):
+    print("🔥 PROGRESS COMMAND TRIGGERED")
 
     if not ctx.guild:
-        await ctx.send("❌ Gunakan di server.")
+        await ctx.send("❌ Gunakan command ini di server.")
         return
 
+    # =========================
+    # 🔍 PARSE INPUT
+    # =========================
     try:
         match = re.search(r"tgl (\d+) bulan (\d+) tahun (\d+)", args)
         if not match:
-            raise ValueError()
+            raise ValueError("Format salah")
 
         day, month, year = map(int, match.groups())
 
-        start_date = datetime(year, month, day)
-        end_date = start_date + timedelta(days=1)
+        target_date = datetime(year, month, day)
+        next_day = target_date + timedelta(days=1)
 
-    except:
-        await ctx.send("❌ Format: `!progress tgl 1 bulan 3 tahun 2026`")
+    except Exception as e:
+        print("❌ Parsing error:", e)
+        await ctx.send("❌ Format salah!\n`!progress tgl 27 bulan 4 tahun 2026`")
         return
 
-    await ctx.send("⏳ Menghitung progress...")
+    await ctx.send("⏳ Menghitung data komunitas...")
 
-    data = calculate_metrics(ctx.guild, start_date, end_date)
+    guild = ctx.guild
 
+    # =========================
+    # 🎯 CHANNEL FILTER
+    # =========================
+    KEYWORDS = [
+        "global-chat",
+        "showcase",
+        "competition",
+        "meme-corner",
+        "main-chat",
+        "weekly-quest",
+        "fun-activity",
+        "kenalan-dulu"
+    ]
+
+    total_messages = 0
+    active_users = set()
+
+    for channel in guild.text_channels:
+        name = channel.name.lower()
+
+        if not any(k in name for k in KEYWORDS):
+            continue
+
+        print(f"🔍 scanning: {channel.name}")
+
+        try:
+            async for message in channel.history(
+                limit=None,
+                after=target_date,
+                before=next_day
+            ):
+                if message.author.bot:
+                    continue
+
+                total_messages += 1
+                active_users.add(message.author.id)
+
+        except Exception as e:
+            print(f"❌ error {channel.name}: {e}")
+
+    engagement = round(total_messages / len(active_users), 2) if active_users else 0
+
+    if engagement <= 2:
+        engagement_label = "🔴 LOW (Komunitas sepi)"
+    elif engagement <= 7:
+        engagement_label = "🟡 MEDIUM (Cukup aktif)"
+    else:
+        engagement_label = "🟢 HIGH (Komunitas sangat aktif)"
+
+    engagement_score = min(100, int(engagement * 10))
+
+    # =========================
+    # 📊 FINAL RESULT
+    # =========================
     result = (
-        f"📊 **Community Health Report**\n\n"
+        f"📊 **Progress Komunitas**\n\n"
         f"📅 {day}-{month}-{year}\n\n"
 
-        f"📝 Text Activity\n"
-        f"👥 Active Users: {data['active_users']}\n"
-        f"👤 Online Users (60d): {data['online_users']}\n"
-        f"💬 Total Chats: {data['total_messages']}\n\n"
+        f"📝 **Text Activity**\n"
+        f"👥 User aktif: {len(active_users)}\n"
+        f"💬 Total pesan: {total_messages}\n\n"
 
-        f"🔥 Engagement Depth\n"
-        f"{data['engagement_depth']} chat/user\n\n"
+        f"📈 **Engagement Analysis**\n"
+        f"🔥 Engagement rate: {engagement}\n"
+        f"📊 Status: {engagement_label}\n"
+        f"📊 Health Score: {engagement_score}/100\n\n"
 
-        f"📊 Engagement Rate\n"
-        f"{data['engagement_rate']}\n\n"
-
-        f"⚠️ Inactive (>60 hari) tidak dihitung"
+        f"✨ **Summary**\n"
+        f"➡️ Rata-rata interaksi per user: {engagement} pesan/user\n"
     )
 
-    progress_channel = discord.utils.get(ctx.guild.text_channels, name="progress")
-    log_channel = discord.utils.get(ctx.guild.text_channels, name="logs")
+    progress_channel = discord.utils.get(guild.text_channels, name="progress")
+    log_channel = discord.utils.get(guild.text_channels, name="logs")
 
     if progress_channel:
         await progress_channel.send(result)
+    else:
+        await ctx.send("❌ Channel #progress tidak ditemukan.")
 
     if log_channel:
         await log_channel.send(
             f"📌 {ctx.author.mention} menjalankan progress\n"
-            f"📅 {day}-{month}-{year}"
+            f"📅 {day}-{month}-{year}\n"
+            f"🔥 Score: {engagement_score}/100"
         )
 
-    await ctx.send("✅ Report terkirim!")
+    await ctx.send("✅ Report berhasil dikirim ke #progress")
