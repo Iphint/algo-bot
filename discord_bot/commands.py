@@ -47,36 +47,14 @@ async def sendverify(ctx):
 
 @bot.command()
 @commands.has_any_role("Moderator", "Administrator")
-async def progress_range(ctx, *, args):
-    print("🔥 RANGE PROGRESS TRIGGERED")
+async def progress(ctx, *, args):
+    print("🔥 PROGRESS COMMAND TRIGGERED")
 
     if not ctx.guild:
         await ctx.send("❌ Gunakan command ini di server.")
         return
-    
-    try:
-        match = re.search(
-            r"tgl (\d+) bulan (\d+) tahun (\d+) sampai tgl (\d+) bulan (\d+) tahun (\d+)",
-            args
-        )
 
-        if not match:
-            raise ValueError("Format salah")
-
-        d1, m1, y1, d2, m2, y2 = map(int, match.groups())
-
-        start_date = datetime(y1, m1, d1)
-        end_date = datetime(y2, m2, d2) + timedelta(days=1)
-
-    except Exception as e:
-        print("❌ Parsing error:", e)
-        await ctx.send(
-            "❌ Format salah!\n"
-            "`!progress_range tgl 21 bulan 4 tahun 2026 sampai tgl 25 bulan 4 tahun 2026`"
-        )
-        return
-
-    await ctx.send("⏳ Menghitung range data...")
+    from services.google_sheet import append_progress_report
 
     guild = ctx.guild
 
@@ -91,19 +69,68 @@ async def progress_range(ctx, *, args):
         "kenalan-dulu"
     ]
 
-    total_messages = 0
-    active_users = set()
+    # =========================
+    # PARSE INPUT: SINGLE / RANGE
+    # =========================
+    try:
+        is_range = "sampai" in args.lower()
+
+        if is_range:
+            match = re.search(
+                r"tgl (\d+) bulan (\d+) tahun (\d+) sampai tgl (\d+) bulan (\d+) tahun (\d+)",
+                args
+            )
+
+            if not match:
+                raise ValueError("Format range salah")
+
+            d1, m1, y1, d2, m2, y2 = map(int, match.groups())
+
+            start_date = datetime(y1, m1, d1)
+            end_date = datetime(y2, m2, d2) + timedelta(days=1)
+
+            date_label = f"{d1}-{m1}-{y1} ➜ {d2}-{m2}-{y2}"
+            report_type = "RANGE"
+
+        else:
+            match = re.search(r"tgl (\d+) bulan (\d+) tahun (\d+)", args)
+
+            if not match:
+                raise ValueError("Format harian salah")
+
+            d, m, y = map(int, match.groups())
+
+            start_date = datetime(y, m, d)
+            end_date = start_date + timedelta(days=1)
+
+            date_label = f"{d}-{m}-{y}"
+            report_type = "DAILY"
+
+    except Exception as e:
+        print("❌ Parsing error:", e)
+        await ctx.send(
+            "❌ Format salah!\n\n"
+            "📌 Harian:\n"
+            "`!progress tgl 18 bulan 5 tahun 2026`\n\n"
+            "📌 Range:\n"
+            "`!progress tgl 1 bulan 5 tahun 2026 sampai tgl 18 bulan 5 tahun 2026`"
+        )
+        return
+
+    await ctx.send("⏳ Menghitung progress komunitas...")
 
     # =========================
-    # 🔍 SCAN RANGE
+    # SCAN ACTIVITY SESUAI RANGE COMMAND
     # =========================
+    total_messages = 0
+    active_users_range = set()
+    user_message_count = {}
+
     for channel in guild.text_channels:
         name = channel.name.lower()
 
         if not any(k in name for k in KEYWORDS):
             continue
-
-        print(f"🔍 scanning: {channel.name}")
 
         try:
             async for message in channel.history(
@@ -114,104 +141,26 @@ async def progress_range(ctx, *, args):
                 if message.author.bot:
                     continue
 
+                uid = message.author.id
+
                 total_messages += 1
-                active_users.add(message.author.id)
+                active_users_range.add(uid)
+                user_message_count[uid] = user_message_count.get(uid, 0) + 1
 
         except Exception as e:
-            print(f"❌ error {channel.name}: {e}")
-
-    engagement = round(total_messages / len(active_users), 2) if active_users else 0
-
-    if engagement <= 2:
-        engagement_label = "🔴 LOW (Komunitas sepi)"
-    elif engagement <= 7:
-        engagement_label = "🟡 MEDIUM (Cukup aktif)"
-    else:
-        engagement_label = "🟢 HIGH (Komunitas sangat aktif)"
-
-    engagement_score = min(100, int(engagement * 10))
-
-    result = (
-        f"📊 **Progress Range Komunitas**\n\n"
-        f"📅 {d1}-{m1}-{y1} ➜ {d2}-{m2}-{y2}\n\n"
-
-        f"📝 Text Activity\n"
-        f"👥 User aktif: {len(active_users)}\n"
-        f"💬 Total pesan: {total_messages}\n\n"
-
-        f"📈 Engagement Analysis\n"
-        f"🔥 Engagement rate: {engagement}\n"
-        f"📊 Status: {engagement_label}\n"
-        f"📊 Health Score: {engagement_score}/100\n\n"
-
-        f"✨ Summary\n"
-        f"➡️ Rata-rata interaksi per user: {engagement} pesan/user\n"
-    )
-
-    progress_channel = discord.utils.get(guild.text_channels, name="progress")
-    log_channel = discord.utils.get(guild.text_channels, name="logs")
-
-    if progress_channel:
-        await progress_channel.send(result)
-    else:
-        await ctx.send("❌ Channel #progress tidak ditemukan.")
-
-    if log_channel:
-        await log_channel.send(
-            f"📌 {ctx.author.mention} menjalankan progress range\n"
-            f"📅 {d1}-{m1}-{y1} ➜ {d2}-{m2}-{y2}\n"
-            f"🔥 Score: {engagement_score}/100"
-        )
-
-    await ctx.send("✅ Report range berhasil dikirim!")
-
-@bot.command()
-@commands.has_any_role("Moderator", "Administrator")
-async def progress(ctx, *, args):
-    print("🔥 PROGRESS COMMAND TRIGGERED")
-
-    if not ctx.guild:
-        await ctx.send("❌ Gunakan command ini di server.")
-        return
+            print(f"❌ Error scan range {channel.name}: {e}")
 
     # =========================
-    # 🔍 PARSE INPUT
+    # SCAN USER AKTIF 90 HARI
+    # NOTE: Discord tidak menyediakan history online/offline.
+    # Jadi active = pernah chat dalam 90 hari.
     # =========================
-    try:
-        match = re.search(r"tgl (\d+) bulan (\d+) tahun (\d+)", args)
-        if not match:
-            raise ValueError("Format salah")
+    now = datetime.utcnow()
+    cutoff_90d = now - timedelta(days=90)
+    cutoff_60d = now - timedelta(days=60)
 
-        day, month, year = map(int, match.groups())
-
-        target_date = datetime(year, month, day)
-        next_day = target_date + timedelta(days=1)
-
-    except Exception as e:
-        print("❌ Parsing error:", e)
-        await ctx.send("❌ Format salah!\n`!progress tgl 27 bulan 4 tahun 2026`")
-        return
-
-    await ctx.send("⏳ Menghitung data komunitas...")
-
-    guild = ctx.guild
-
-    # =========================
-    # 🎯 CHANNEL FILTER
-    # =========================
-    KEYWORDS = [
-        "global-chat",
-        "showcase",
-        "competition",
-        "meme-corner",
-        "main-chat",
-        "weekly-quest",
-        "fun-activity",
-        "kenalan-dulu"
-    ]
-
-    total_messages = 0
-    active_users = set()
+    active_users_90d = set()
+    active_users_60d = set()
 
     for channel in guild.text_channels:
         name = channel.name.lower()
@@ -219,52 +168,112 @@ async def progress(ctx, *, args):
         if not any(k in name for k in KEYWORDS):
             continue
 
-        print(f"🔍 scanning: {channel.name}")
-
         try:
             async for message in channel.history(
                 limit=None,
-                after=target_date,
-                before=next_day
+                after=cutoff_90d
             ):
                 if message.author.bot:
                     continue
 
-                total_messages += 1
-                active_users.add(message.author.id)
+                active_users_90d.add(message.author.id)
+
+                if message.created_at.replace(tzinfo=None) >= cutoff_60d:
+                    active_users_60d.add(message.author.id)
 
         except Exception as e:
-            print(f"❌ error {channel.name}: {e}")
+            print(f"❌ Error scan 90d {channel.name}: {e}")
 
-    engagement = round(total_messages / len(active_users), 2) if active_users else 0
+    # =========================
+    # AMBIL SEMUA MEMBER NON BOT
+    # =========================
+    all_members = [
+        member for member in guild.members
+        if not member.bot
+    ]
 
-    if engagement <= 2:
-        engagement_label = "🔴 LOW (Komunitas sepi)"
-    elif engagement <= 7:
-        engagement_label = "🟡 MEDIUM (Cukup aktif)"
+    all_member_ids = set(member.id for member in all_members)
+
+    inactive_users_90d = all_member_ids - active_users_90d
+
+    # =========================
+    # LIST NAMA USER
+    # =========================
+    active_user_names = []
+    inactive_user_names = []
+
+    for uid in active_users_90d:
+        member = guild.get_member(uid)
+        if member:
+            active_user_names.append(member.display_name)
+
+    for uid in inactive_users_90d:
+        member = guild.get_member(uid)
+        if member:
+            inactive_user_names.append(member.display_name)
+
+    active_user_names.sort()
+    inactive_user_names.sort()
+
+    # =========================
+    # METRICS
+    # =========================
+    engagement_depth = (
+        round(total_messages / len(active_users_range), 2)
+        if active_users_range else 0
+    )
+
+    active_rate_60d = (
+        round((len(active_users_range) / len(active_users_60d)) * 100, 2)
+        if active_users_60d else 0
+    )
+
+    if engagement_depth <= 2:
+        engagement_label = "🔴 LOW DEPTH"
+    elif engagement_depth <= 7:
+        engagement_label = "🟡 MEDIUM DEPTH"
     else:
-        engagement_label = "🟢 HIGH (Komunitas sangat aktif)"
+        engagement_label = "🟢 HIGH DEPTH"
 
-    engagement_score = min(100, int(engagement * 10))
+    engagement_score = min(100, int(engagement_depth * 10))
 
     # =========================
-    # 📊 FINAL RESULT
+    # DISCORD RESULT
     # =========================
+    active_preview = "\n".join([f"- {name}" for name in active_user_names[:15]])
+    inactive_preview = "\n".join([f"- {name}" for name in inactive_user_names[:15]])
+
+    if len(active_user_names) > 15:
+        active_preview += f"\n... dan {len(active_user_names) - 15} user lainnya"
+
+    if len(inactive_user_names) > 15:
+        inactive_preview += f"\n... dan {len(inactive_user_names) - 15} user lainnya"
+
     result = (
         f"📊 **Progress Komunitas**\n\n"
-        f"📅 {day}-{month}-{year}\n\n"
+        f"📅 **Periode:** {date_label}\n\n"
 
         f"📝 **Text Activity**\n"
-        f"👥 User aktif: {len(active_users)}\n"
-        f"💬 Total pesan: {total_messages}\n\n"
+        f"💬 Total pesan: **{total_messages}**\n"
+        f"👥 User aktif di periode ini: **{len(active_users_range)}**\n\n"
+
+        f"👥 **User Health**\n"
+        f"🟢 Active users 90 hari: **{len(active_users_90d)}**\n"
+        f"🔴 Inactive users 90 hari: **{len(inactive_users_90d)}**\n\n"
 
         f"📈 **Engagement Analysis**\n"
-        f"🔥 Engagement rate: {engagement}\n"
+        f"🔥 Engagement Depth: **{engagement_depth} pesan/user aktif periode**\n"
+        f"📊 Active Rate 60d: **{active_rate_60d}%**\n"
         f"📊 Status: {engagement_label}\n"
-        f"📊 Health Score: {engagement_score}/100\n\n"
+        f"🎯 Health Score: **{engagement_score}/100**\n\n"
 
-        f"✨ **Summary**\n"
-        f"➡️ Rata-rata interaksi per user: {engagement} pesan/user\n"
+        f"🟢 **Active User Preview**\n"
+        f"{active_preview if active_preview else '-'}\n\n"
+
+        f"🔴 **Inactive User Preview**\n"
+        f"{inactive_preview if inactive_preview else '-'}\n\n"
+
+        f"📌 Full list sudah dikirim ke spreadsheet `progress-reports`."
     )
 
     progress_channel = discord.utils.get(guild.text_channels, name="progress")
@@ -277,9 +286,27 @@ async def progress(ctx, *, args):
 
     if log_channel:
         await log_channel.send(
-            f"📌 {ctx.author.mention} menjalankan progress\n"
-            f"📅 {day}-{month}-{year}\n"
-            f"🔥 Score: {engagement_score}/100"
+            f"📌 {ctx.author.mention} menjalankan progress report\n"
+            f"📅 {date_label}\n"
+            f"🔥 Depth: {engagement_depth}\n"
+            f"🟢 Active 90d: {len(active_users_90d)}\n"
+            f"🔴 Inactive 90d: {len(inactive_users_90d)}"
         )
+    
+    append_progress_report({
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        "report_type": report_type,
+        "date_range": date_label,
+        "total_messages": total_messages,
+        "active_users_range": len(active_users_range),
+        "active_users_90d": len(active_users_90d),
+        "inactive_users_90d": len(inactive_users_90d),
+        "engagement_depth": engagement_depth,
+        "active_rate_60d": f"{active_rate_60d}%",
+        "score": engagement_score,
+        "active_user_list": ", ".join(active_user_names),
+        "inactive_user_list": ", ".join(inactive_user_names),
+        "executed_by": str(ctx.author),
+    })
 
-    await ctx.send("✅ Report berhasil dikirim ke #progress")
+    await ctx.send("✅ Progress report berhasil dikirim ke #progress dan spreadsheet.")

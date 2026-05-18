@@ -83,7 +83,6 @@ def get_student_by_username_password(username, password):
     default_sheet = COURSE_SHEET_MAP.get("default")
     return find_student_in_sheet(default_sheet, username, password)
 
-
 def get_user_log_status(discord_id):
     res = sheet.values().get(
         spreadsheetId=SPREADSHEET_ID,
@@ -94,7 +93,6 @@ def get_user_log_status(discord_id):
         if len(row) > 6 and row[3] == str(discord_id):
             return row[6]
     return None
-
 
 def log_discord_join(student, member):
     res = sheet.values().get(
@@ -181,3 +179,83 @@ def get_student_by_discord_id(discord_id):
             }
 
     return None
+
+def append_report(sheet_name, data):
+    values = [[
+        data.get("timestamp", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")),
+        data.get("report_type", ""),
+        data.get("reporter_name", ""),
+        data.get("reporter_id", ""),
+        data.get("category", ""),
+        data.get("target_user", ""),
+        data.get("title", ""),
+        data.get("detail", ""),
+        data.get("status", "OPEN"),
+    ]]
+
+    sheet.values().append(
+        spreadsheetId=SPREADSHEET_ID,
+        range=f"'{sheet_name}'!A:I",
+        valueInputOption="USER_ENTERED",
+        insertDataOption="INSERT_ROWS",
+        body={"values": values}
+    ).execute()
+
+    print(f"✅ Report berhasil ditambahkan ke sheet: {sheet_name}")
+    return True
+
+def append_progress_report(data):
+    values = [[
+        data.get("timestamp", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")),
+        data.get("report_type", ""),
+        data.get("date_range", ""),
+        data.get("total_messages", 0),
+        data.get("active_users_range", 0),
+        data.get("active_users_90d", 0),
+        data.get("inactive_users_90d", 0),
+        data.get("engagement_depth", 0),
+        data.get("active_rate_60d", "0%"),
+        data.get("score", 0),
+        data.get("active_user_list", ""),
+        data.get("inactive_user_list", ""),
+        data.get("executed_by", ""),
+    ]]
+
+    sheet.values().append(
+        spreadsheetId=SPREADSHEET_ID,
+        range="'progress-reports'!A:M",
+        valueInputOption="USER_ENTERED",
+        insertDataOption="INSERT_ROWS",
+        body={"values": values}
+    ).execute()
+
+    print("✅ Progress report berhasil masuk spreadsheet")
+    return True
+
+def append_progress_report(data):
+    values = [[
+        data.get("timestamp", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")),
+        data.get("report_type", ""),
+        data.get("date_range", ""),
+        data.get("total_messages", 0),
+        data.get("active_users_range", 0),
+        data.get("active_users_90d", 0),
+        data.get("inactive_users_90d", 0),
+        data.get("engagement_depth", 0),
+        data.get("active_rate_60d", "0%"),
+        data.get("score", 0),
+        data.get("active_user_list", ""),
+        data.get("inactive_user_list", ""),
+        data.get("executed_by", ""),
+    ]]
+
+    sheet.values().append(
+        spreadsheetId=SPREADSHEET_ID,
+        range="'progress-reports'!A:M",
+        valueInputOption="USER_ENTERED",
+        insertDataOption="INSERT_ROWS",
+        body={"values": values}
+    ).execute()
+
+    print("✅ Progress report berhasil masuk spreadsheet")
+    return True

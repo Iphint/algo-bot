@@ -9,6 +9,8 @@
 # ======================
 credentials.json
 credentials*.json
+service.json
+service*.json
 
 # ======================
 # Python Cache

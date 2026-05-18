@@ -3,6 +3,12 @@ from discord_bot.bot import bot
 from services.google_sheet import update_status_by_discord_id
 from discord_bot.verify_ui import VerifyView
 from discord_bot.templates import get_random_intro
+from discord_bot.report_ui import (
+    ReportCenterView,
+    StudentReportView,
+    REPORT_CENTER_CHANNEL,
+    STUDENT_REPORT_CHANNEL
+)
 from datetime import datetime, timedelta
 import asyncio
 
@@ -10,9 +16,80 @@ pending_intro = {}
 
 @bot.event
 async def on_ready():
-    bot.add_view(VerifyView()) 
+    bot.add_view(VerifyView())
+
+    bot.add_view(ReportCenterView())
+    bot.add_view(StudentReportView())
+
+    await setup_report_panels()
+
     bot.loop.create_task(check_pending_intro())
     print(f"✅ Bot aktif sebagai {bot.user}")
+
+async def setup_report_panels():
+    for guild in bot.guilds:
+        report_center = discord.utils.get(
+            guild.text_channels,
+            name=REPORT_CENTER_CHANNEL
+        )
+
+        student_reports = discord.utils.get(
+            guild.text_channels,
+            name=STUDENT_REPORT_CHANNEL
+        )
+
+        if report_center:
+            await ensure_report_center_panel(report_center)
+
+        if student_reports:
+            await ensure_student_report_panel(student_reports)
+
+
+async def ensure_report_center_panel(channel):
+    async for message in channel.history(limit=20):
+        if message.author == bot.user and message.embeds:
+            if message.embeds[0].title == "🛡️ Algonova Safety Report Center":
+                return
+
+    embed = discord.Embed(
+        title="🛡️ Algonova Safety Report Center",
+        description=(
+            "Gunakan tombol di bawah untuk melaporkan hal mencurigakan.\n\n"
+            "Contoh:\n"
+            "🚨 Spam crypto\n"
+            "🔐 Akun kena hack\n"
+            "🔗 Scam link\n"
+            "👤 Impersonation\n\n"
+            "Laporan akan masuk ke spreadsheet sheet `report-center`."
+        ),
+        color=0xe74c3c
+    )
+
+    await channel.send(embed=embed, view=ReportCenterView())
+
+
+async def ensure_student_report_panel(channel):
+    async for message in channel.history(limit=20):
+        if message.author == bot.user and message.embeds:
+            if message.embeds[0].title == "🎓 Algonova Student Report Center":
+                return
+
+    embed = discord.Embed(
+        title="🎓 Algonova Student Report Center",
+        description=(
+            "Gunakan tombol di bawah untuk melaporkan kendala akun siswa.\n\n"
+            "Contoh:\n"
+            "🔐 Tidak bisa login\n"
+            "🔑 Lupa password\n"
+            "🏷️ Salah role\n"
+            "✅ Gagal verifikasi\n"
+            "🚪 Tidak bisa akses channel\n\n"
+            "Laporan akan masuk ke spreadsheet sheet `student-reports`."
+        ),
+        color=0x3498db
+    )
+
+    await channel.send(embed=embed, view=StudentReportView())
 
 @bot.event  
 async def on_member_join(member):
