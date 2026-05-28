@@ -14,6 +14,11 @@ import asyncio
 
 pending_intro = {}
 
+NEW_MEMBER_MODERATOR_IDS = [
+    943726651399864330, # Arifin
+    1407622673130983555 # kak Nad
+]
+
 @bot.event
 async def on_ready():
     bot.add_view(VerifyView())
@@ -91,9 +96,28 @@ async def ensure_student_report_panel(channel):
 
     await channel.send(embed=embed, view=StudentReportView())
 
+async def notify_moderators_new_member(member):
+    for moderator_id in NEW_MEMBER_MODERATOR_IDS:
+        try:
+            moderator = await bot.fetch_user(moderator_id)
+
+            if moderator:
+                await moderator.send(
+                    f"👋 **User baru join server**\n\n"
+                    f"User: {member.mention}\n"
+                    f"Username: `{member}`\n"
+                    f"User ID: `{member.id}`\n"
+                    f"Server: **{member.guild.name}**\n\n"
+                    f"➡️ Mohon pantau proses verifikasi dan intro user ini."
+                )
+
+        except Exception as e:
+            print(f"❌ Gagal DM moderator {moderator_id}: {e}")
+
 @bot.event  
 async def on_member_join(member):
     guild = member.guild
+    await notify_moderators_new_member(member)
     unverified_role = discord.utils.get(guild.roles, name="Unverified")
     if unverified_role:
         await member.add_roles(unverified_role)
