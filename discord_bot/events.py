@@ -16,7 +16,8 @@ pending_intro = {}
 
 NEW_MEMBER_MODERATOR_IDS = [
     943726651399864330, # Arifin
-    1407622673130983555 # kak Nad
+    1407622673130983555, # kak Nad
+    1385603832293228658
 ]
 
 @bot.event
