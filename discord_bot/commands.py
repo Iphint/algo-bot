@@ -349,7 +349,7 @@ async def joined(ctx, *args):
         )
         return
 
-    welcome_channel = discord.utils.get(ctx.guild.text_channels, name="welcome")
+    welcome_channel = discord.utils.get(ctx.guild.text_channels, name="🚪︱welcome")
 
     if not welcome_channel:
         await ctx.send("❌ Channel `#welcome` tidak ditemukan.")
