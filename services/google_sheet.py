@@ -259,3 +259,42 @@ def append_progress_report(data):
 
     print("✅ Progress report berhasil masuk spreadsheet")
     return True
+
+def get_joined_students_by_date_range(start_date, end_date):
+    res = sheet.values().get(
+        spreadsheetId=SPREADSHEET_ID,
+        range=f"{LOG_SHEET}!A:G"
+    ).execute()
+
+    rows = res.get("values", [])
+
+    if not rows:
+        return []
+
+    joined_students = []
+
+    for row in rows[1:]:
+        try:
+            username = row[0] if len(row) > 0 else "-"
+            student_id = row[2] if len(row) > 2 else "-"
+            discord_id = row[3] if len(row) > 3 else "-"
+            discord_name = row[4] if len(row) > 4 else "-"
+            joined_at = row[5] if len(row) > 5 else "-"
+            status = row[6] if len(row) > 6 else "-"
+
+            joined_date = datetime.strptime(joined_at, "%Y-%m-%d %H:%M:%S")
+
+            if start_date <= joined_date < end_date:
+                joined_students.append({
+                    "username": username,
+                    "student_id": student_id,
+                    "discord_id": discord_id,
+                    "discord_name": discord_name,
+                    "joined_at": joined_at,
+                    "status": status
+                })
+
+        except Exception as e:
+            print("❌ Skip row join report:", e)
+
+    return joined_students

@@ -310,3 +310,142 @@ async def progress(ctx, *, args):
     })
 
     await ctx.send("✅ Progress report berhasil dikirim ke #progress dan spreadsheet.")
+
+
+@bot.command()
+@commands.has_any_role("Moderator", "Administrator")
+async def joined(ctx, *args):
+    print("🔥 JOINED REPORT COMMAND TRIGGERED")
+
+    if not ctx.guild:
+        await ctx.send("❌ Gunakan command ini di server.")
+        return
+
+    from services.google_sheet import get_joined_students_by_date_range
+
+    try:
+        # =====================
+        # SINGLE DATE
+        # !joined 18-5-2026
+        # =====================
+        if len(args) == 1:
+
+            d, m, y = map(
+                int,
+                args[0].split("-")
+            )
+
+            start_date = datetime(
+                y, m, d
+            )
+
+            end_date = (
+                start_date +
+                timedelta(days=1)
+            )
+
+            date_label = args[0]
+
+
+        # =====================
+        # RANGE DATE
+        # !joined 1-5-2026 18-5-2026
+        # =====================
+        elif len(args) == 2:
+
+            d1, m1, y1 = map(
+                int,
+                args[0].split("-")
+            )
+
+            d2, m2, y2 = map(
+                int,
+                args[1].split("-")
+            )
+
+            start_date = datetime(
+                y1, m1, d1
+            )
+
+            end_date = (
+                datetime(y2, m2, d2)
+                + timedelta(days=1)
+            )
+
+            date_label = (
+                f"{args[0]} ➜ {args[1]}"
+            )
+
+
+        else:
+            raise ValueError(
+                "Format salah"
+            )
+
+
+    except Exception as e:
+        print(e)
+
+        await ctx.send(
+            "❌ Format salah!\n\n"
+            "Gunakan:\n"
+            "`!joined 18-5-2026`\n\n"
+            "atau\n"
+            "`!joined 1-5-2026 18-5-2026`"
+        )
+        return
+
+
+    await ctx.send(
+        "⏳ Mengambil data siswa join..."
+    )
+
+
+    students = (
+        get_joined_students_by_date_range(
+            start_date,
+            end_date
+        )
+    )
+
+
+    preview = "\n".join(
+        [
+            f"- {s['username']} | {s['discord_name']}"
+            for s in students[:20]
+        ]
+    )
+
+
+    if len(students) > 20:
+        preview += (
+            f"\n... dan "
+            f"{len(students)-20} siswa lainnya"
+        )
+
+
+    result = (
+        f"📥 **Joined Student Report**\n\n"
+        f"📅 Periode: {date_label}\n"
+        f"👥 Total join: {len(students)}\n\n"
+
+        f"📋 Student:\n"
+        f"{preview if preview else '-'}"
+    )
+
+
+    progress_channel = discord.utils.get(
+        ctx.guild.text_channels,
+        name="progress"
+    )
+
+
+    if progress_channel:
+        await progress_channel.send(result)
+    else:
+        await ctx.send(result)
+
+
+    await ctx.send(
+        "✅ Report selesai!"
+    )

@@ -50,7 +50,6 @@ async def setup_report_panels():
         if student_reports:
             await ensure_student_report_panel(student_reports)
 
-
 async def ensure_report_center_panel(channel):
     async for message in channel.history(limit=20):
         if message.author == bot.user and message.embeds:
@@ -72,7 +71,6 @@ async def ensure_report_center_panel(channel):
     )
 
     await channel.send(embed=embed, view=ReportCenterView())
-
 
 async def ensure_student_report_panel(channel):
     async for message in channel.history(limit=20):
