@@ -311,7 +311,6 @@ async def progress(ctx, *, args):
 
     await ctx.send("✅ Progress report berhasil dikirim ke #progress dan spreadsheet.")
 
-
 @bot.command()
 @commands.has_any_role("Moderator", "Administrator")
 async def joined(ctx, *args):
