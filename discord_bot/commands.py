@@ -349,16 +349,27 @@ async def joined(ctx, *args):
         )
         return
 
-    welcome_channel = discord.utils.get(ctx.guild.text_channels, name="🚪︱welcome")
+    welcome_channel = discord.utils.find(
+        lambda c: "welcome" in c.name.lower(),
+        ctx.guild.text_channels
+    )
 
     if not welcome_channel:
-        await ctx.send("❌ Channel `#welcome` tidak ditemukan.")
+        available_channels = ", ".join(
+            [c.name for c in ctx.guild.text_channels[:30]]
+        )
+
+        await ctx.send(
+            "❌ Channel welcome tidak ditemukan.\n\n"
+            f"Channel yang terbaca bot:\n`{available_channels}`"
+        )
         return
 
-    await ctx.send("⏳ Menghitung data join dari #welcome...")
+    await ctx.send("⏳ Menghitung data join dan respond welcome...")
 
     total_join = 0
-    joined_users = []
+    joined_users = set()
+    respond_users = set()
 
     try:
         async for message in welcome_channel.history(
@@ -366,42 +377,65 @@ async def joined(ctx, *args):
             after=start_date,
             before=end_date
         ):
-            # Kalau pesan welcome dikirim bot
-            total_join += 1
+            # pesan welcome dari bot
+            if message.author.bot:
+                total_join += 1
 
-            if message.mentions:
                 for user in message.mentions:
                     if not user.bot:
-                        joined_users.append(user.display_name)
+                        joined_users.add(user.display_name)
+
+            # balasan user di welcome
+            else:
+                respond_users.add(message.author.display_name)
 
     except Exception as e:
         print(f"❌ Error scan welcome: {e}")
         await ctx.send("❌ Gagal scan channel welcome.")
         return
 
-    unique_joined_users = sorted(set(joined_users))
+    total_respond = len(respond_users)
+    not_respond = max(total_join - total_respond, 0)
 
-    preview = "\n".join(
-        [f"- {name}" for name in unique_joined_users[:20]]
+    response_rate = (
+        round((total_respond / total_join) * 100, 2)
+        if total_join > 0
+        else 0
     )
 
-    if len(unique_joined_users) > 20:
-        preview += f"\n... dan {len(unique_joined_users) - 20} user lainnya"
+    respond_list = sorted(list(respond_users))
+
+    respond_preview = "\n".join(
+        [f"- {name}" for name in respond_list[:20]]
+    )
+
+    if len(respond_list) > 20:
+        respond_preview += f"\n... dan {len(respond_list) - 20} user lainnya"
 
     result = (
         f"📥 **Joined Student Report**\n\n"
         f"📅 Periode: **{date_label}**\n"
-        f"📍 Source: `#welcome`\n"
-        f"👥 Total welcome message: **{total_join}**\n"
-        f"👤 User terdeteksi: **{len(unique_joined_users)}**\n\n"
-        f"📋 **Daftar user:**\n"
-        f"{preview if preview else '- Tidak ada mention user terdeteksi'}"
+        f"📍 Source: {welcome_channel.mention}\n\n"
+
+        f"👥 **Join Activity**\n"
+        f"➡️ Total Join: **{total_join}**\n\n"
+
+        f"🙋 **Welcome Engagement**\n"
+        f"✅ Respond Welcome: **{total_respond}**\n"
+        f"💤 Tidak Respond: **{not_respond}**\n"
+        f"📊 Respond Rate: **{response_rate}%**\n\n"
+
+        f"📋 **User yang Respond:**\n"
+        f"{respond_preview if respond_preview else '-'}"
     )
 
-    progress_channel = discord.utils.get(ctx.guild.text_channels, name="progress")
+    progress_channel = discord.utils.get(
+        ctx.guild.text_channels,
+        name="progress"
+    )
 
     if progress_channel:
         await progress_channel.send(result)
-        await ctx.send("✅ Joined report dari #welcome berhasil dikirim ke #progress.")
+        await ctx.send("✅ Joined report berhasil dikirim ke #progress.")
     else:
         await ctx.send(result)
