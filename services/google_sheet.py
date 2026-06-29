@@ -1,7 +1,7 @@
 from datetime import datetime
 from google.oauth2 import service_account # type: ignore
 from googleapiclient.discovery import build # type: ignore
-from config import SCOPES, SPREADSHEET_ID, STUDENT_SHEET, LOG_SHEET, COURSE_SHEET_MAP
+from config import SCOPES, SPREADSHEET_ID, STUDENT_SHEET, LOG_SHEET, COURSE_SHEET_MAP, WARNING_SHEET
 
 creds = service_account.Credentials.from_service_account_file(
     "credentials.json",
@@ -298,3 +298,102 @@ def get_joined_students_by_date_range(start_date, end_date):
             print("❌ Skip row join report:", e)
 
     return joined_students
+
+
+warning_cache = {}
+
+def get_user_warning_count(discord_id):
+    global warning_cache
+    if discord_id in warning_cache:
+        return warning_cache[discord_id]
+
+    try:
+        res = sheet.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{WARNING_SHEET}!A:E"
+        ).execute()
+
+        rows = res.get("values", [])
+        if not rows:
+            return 0
+
+        for row in rows[1:]:
+            if len(row) > 1 and str(row[1]) == str(discord_id):
+                count = int(row[2]) if row[2] else 0
+                warning_cache[discord_id] = count
+                return count
+
+    except Exception as e:
+        print(f"❌ Error getting warning count: {e}")
+
+    return 0
+
+
+def increment_warning(discord_id, word_used):
+    global warning_cache
+    count = get_user_warning_count(discord_id)
+    new_count = count + 1
+
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        res = sheet.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{WARNING_SHEET}!A:E"
+        ).execute()
+
+        rows = res.get("values", [])
+
+        found = False
+        for idx, row in enumerate(rows[1:], start=2):
+            if len(row) > 1 and str(row[1]) == str(discord_id):
+                sheet.values().update(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range=f"{WARNING_SHEET}!B{idx}:E{idx}",
+                    valueInputOption="RAW",
+                    body={"values": [[str(discord_id), new_count, word_used, now]]}
+                ).execute()
+                found = True
+                break
+
+        if not found:
+            sheet.values().append(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{WARNING_SHEET}!A:E",
+                valueInputOption="RAW",
+                insertDataOption="INSERT_ROWS",
+                body={"values": [[str(discord_id), discord_id, new_count, word_used, now]]}
+            ).execute()
+
+        warning_cache[discord_id] = new_count
+        print(f"✅ Warning {new_count}/6 for user {discord_id}")
+
+    except Exception as e:
+        print(f"❌ Error incrementing warning: {e}")
+
+    return new_count
+
+
+def reset_warning(discord_id):
+    global warning_cache
+    warning_cache[discord_id] = 0
+
+    try:
+        res = sheet.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{WARNING_SHEET}!A:E"
+        ).execute()
+
+        rows = res.get("values", [])
+        for idx, row in enumerate(rows[1:], start=2):
+            if len(row) > 1 and str(row[1]) == str(discord_id):
+                sheet.values().update(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range=f"{WARNING_SHEET}!C{idx}",
+                    valueInputOption="RAW",
+                    body={"values": [["0"]]}
+                ).execute()
+                break
+
+    except Exception as e:
+        print(f"❌ Error resetting warning: {e}")

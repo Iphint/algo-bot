@@ -1,6 +1,6 @@
 import discord # type: ignore
 from discord_bot.bot import bot
-from services.google_sheet import update_status_by_discord_id
+from services.google_sheet import update_status_by_discord_id, get_user_warning_count, increment_warning, reset_warning
 from discord_bot.verify_ui import VerifyView
 from discord_bot.templates import get_random_intro
 from discord_bot.report_ui import (
@@ -9,6 +9,8 @@ from discord_bot.report_ui import (
     REPORT_CENTER_CHANNEL,
     STUDENT_REPORT_CHANNEL
 )
+from discord_bot.profanity_filter import contains_profanity
+from config import EXEMPT_ROLES, WARNING_ROLES
 from datetime import datetime, timedelta
 import asyncio
 
@@ -145,6 +147,7 @@ async def on_message(message):
     if message.author.bot:
         return
     print("📩 Message:", message.content)
+
     if message.guild is not None:
         if hasattr(message.channel, "name") and message.channel.name == "kenalan-dulu":
             user_id = message.author.id
@@ -152,7 +155,78 @@ async def on_message(message):
                 pending_intro[user_id]["replied"] = True
                 print(f"✅ {message.author} sudah intro")
 
+        await handle_profanity_filter(message)
+
     await bot.process_commands(message)
+
+
+async def handle_profanity_filter(message):
+    channel_name = message.channel.name.lower()
+
+    if "admin" in channel_name or "mod" in channel_name:
+        return
+
+    member_roles = [role.name for role in message.author.roles]
+    if any(role in EXEMPT_ROLES for role in member_roles):
+        return
+
+    found_words = contains_profanity(message.content)
+    if not found_words:
+        return
+
+    word_display = ", ".join(found_words)
+    warning_count = increment_warning(message.author.id, word_display)
+
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    if warning_count <= 3:
+        role_name = WARNING_ROLES.get(warning_count)
+        role = discord.utils.get(message.guild.roles, name=role_name)
+
+        if role:
+            await message.author.add_roles(role)
+
+        desc = f"Kata kasar terdeteksi: `{word_display}`\nPeringatan **{warning_count}/6**"
+        if warning_count == 3:
+            desc += "\n\n⚠️ **Peringatan terakhir!** Jika diulangi akan di-timeout."
+        embed = discord.Embed(description=desc, color=0xffa500)
+        await message.channel.send(embed=embed, delete_after=8)
+
+    elif warning_count == 4:
+        try:
+            timeout_duration = timedelta(days=1)
+            await message.author.timeout(timeout_duration, reason="Profanity warning 4 - timeout 1 hari")
+        except Exception:
+            pass
+
+        desc = f"Kata kasar terdeteksi: `{word_display}`\n⏰ **Timeout 1 hari** diberikan."
+        embed = discord.Embed(description=desc, color=0xff4500)
+        await message.channel.send(embed=embed, delete_after=10)
+
+    elif warning_count == 5:
+        try:
+            timeout_duration = timedelta(days=5)
+            await message.author.timeout(timeout_duration, reason="Profanity warning 5 - timeout 5 hari")
+        except Exception:
+            pass
+
+        desc = f"Kata kasar terdeteksi: `{word_display}`\n🔒 **Timeout 5 hari** diberikan."
+        embed = discord.Embed(description=desc, color=0xff0000)
+        await message.channel.send(embed=embed, delete_after=10)
+
+    elif warning_count >= 6:
+        try:
+            await message.author.ban(reason="Profanity warning 6 - permanent ban", delete_message_days=0)
+            reset_warning(message.author.id)
+        except Exception:
+            pass
+
+        desc = f"Kata kasar terdeteksi: `{word_display}`\n🚫 **Banned permanen.**"
+        embed = discord.Embed(description=desc, color=0x800000)
+        await message.channel.send(embed=embed, delete_after=10)
 
 async def check_pending_intro():
     await bot.wait_until_ready()

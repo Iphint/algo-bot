@@ -16,6 +16,17 @@ intents.message_content = True
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 STUDENT_SHEET = "students"
 LOG_SHEET = "discord_log"
+WARNING_SHEET = "warnings"
+
+# Profanity filter - exempt roles
+EXEMPT_ROLES = ["Moderator", "Administrator", "Owner"]
+
+# Warning roles
+WARNING_ROLES = {
+    1: "⚠️ Warning 1",
+    2: "⚠️ Warning 2",
+    3: "⚠️ Warning 3",
+}
 
 # Course → Role map
 COURSE_ROLE_MAP = [
