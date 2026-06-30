@@ -438,3 +438,112 @@ async def joined(ctx, *args):
         await ctx.send("✅ Joined report berhasil dikirim ke #progress.")
     else:
         await ctx.send(result)
+
+
+@bot.command()
+@commands.has_any_role("Moderator", "Administrator")
+async def intro_stats(ctx, *args):
+    print("🔥 INTRO STATS TRIGGERED")
+
+    if not ctx.guild:
+        await ctx.send("❌ Gunakan command ini di server.")
+        return
+
+    await ctx.send("⏳ Menghitung data intro dan join...")
+
+    try:
+        if len(args) == 1:
+            d, m, y = map(int, args[0].split("-"))
+            start_date = datetime(y, m, d)
+            end_date = start_date + timedelta(days=1)
+            date_label = args[0]
+        elif len(args) == 2:
+            d1, m1, y1 = map(int, args[0].split("-"))
+            d2, m2, y2 = map(int, args[1].split("-"))
+            start_date = datetime(y1, m1, d1)
+            end_date = datetime(y2, m2, d2) + timedelta(days=1)
+            date_label = f"{args[0]} ➜ {args[1]}"
+        else:
+            start_date = datetime.utcnow() - timedelta(days=7)
+            end_date = datetime.utcnow()
+            date_label = "7 hari terakhir"
+    except Exception:
+        start_date = datetime.utcnow() - timedelta(days=7)
+        end_date = datetime.utcnow()
+        date_label = "7 hari terakhir"
+
+    guild = ctx.guild
+
+    joined_users = []
+    for member in guild.members:
+        if member.bot:
+            continue
+        if member.joined_at:
+            joined_at = member.joined_at.replace(tzinfo=None)
+            if start_date <= joined_at < end_date:
+                joined_users.append(member)
+
+    intro_channel = discord.utils.get(guild.text_channels, name="kenalan-dulu")
+    responded_user_ids = set()
+
+    if intro_channel:
+        try:
+            async for message in intro_channel.history(limit=None):
+                if message.author.bot:
+                    continue
+                if message.created_at.replace(tzinfo=None) >= start_date:
+                    responded_user_ids.add(message.author.id)
+        except Exception as e:
+            print(f"❌ Error scan kenalan-dulu: {e}")
+
+    total_joined = len(joined_users)
+    intro_respondents = [m for m in joined_users if m.id in responded_user_ids]
+    no_intro = [m for m in joined_users if m.id not in responded_user_ids]
+
+    total_responded = len(intro_respondents)
+    total_no_intro = len(no_intro)
+    response_rate = (
+        round((total_responded / total_joined) * 100, 2)
+        if total_joined > 0
+        else 0
+    )
+
+    responded_list = "\n".join(
+        [f"- {m.display_name}" for m in intro_respondents[:20]]
+    ) or "-"
+    no_intro_list = "\n".join(
+        [f"- {m.display_name}" for m in no_intro[:20]]
+    ) or "-"
+
+    if len(intro_respondents) > 20:
+        responded_list += f"\n... dan {len(intro_respondents) - 20} user lainnya"
+    if len(no_intro) > 20:
+        no_intro_list += f"\n... dan {len(no_intro) - 20} user lainnya"
+
+    result = (
+        f"📋 **Intro Report — Kenalan Dulu**\n\n"
+        f"📅 Periode: **{date_label}**\n"
+        f"📍 Channel: {intro_channel.mention if intro_channel else '#kenalan-dulu'}\n\n"
+
+        f"👥 **Join Activity**\n"
+        f"➡️ Total Join: **{total_joined}**\n\n"
+
+        f"🙋 **Intro Engagement**\n"
+        f"✅ Sudah Intro: **{total_responded}**\n"
+        f"💤 Belum Intro: **{total_no_intro}**\n"
+        f"📊 Response Rate: **{response_rate}%**\n\n"
+
+        f"✅ **User yang Sudah Intro:**\n"
+        f"{responded_list}\n\n"
+
+        f"💤 **User yang Belum Intro:**\n"
+        f"{no_intro_list}"
+    )
+
+    progress_channel = discord.utils.get(guild.text_channels, name="progress")
+
+    if progress_channel:
+        await progress_channel.send(result)
+        await ctx.send("✅ Intro stats berhasil dikirim ke #progress.")
+    else:
+        await ctx.send(result)

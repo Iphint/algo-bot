@@ -23,7 +23,7 @@ pip install -r requirements.txt
 - `main.py` — entrypoint; imports events and commands, runs bot
 - `config.py` — env vars, intents, role/sheet maps
 - `discord_bot/bot.py` — `commands.Bot` instance
-- `discord_bot/commands.py` — prefix commands (`!test`, `!recheck`, `!sendverify`, `!progress`, `!joined`)
+- `discord_bot/commands.py` — prefix commands (`!test`, `!recheck`, `!sendverify`, `!progress`, `!joined`, `!intro_stats`)
 - `discord_bot/events.py` — `on_ready`, `on_member_join`, `on_member_remove`, `on_message`, pending-intro checker loop
 - `discord_bot/verify_ui.py` — modal-based student verification (Google Sheets lookup)
 - `discord_bot/report_ui.py` — safety + student report modals
