@@ -142,6 +142,9 @@ def get_intro_message(members):
     mention_str = format_mentions(members)
     if len(members) == 1:
         template = random.choice(INTRO_TEMPLATES)
+        template = template.replace("{username}", mention_str)
+        template = template.replace("{mentions}", mention_str)
     else:
         template = random.choice(MULTI_INTRO_TEMPLATES)
-    return template.replace("{mentions}", mention_str)
+        template = template.replace("{mentions}", mention_str)
+    return template

@@ -345,9 +345,12 @@ async def auto_welcome_loop():
     WELCOME_USER_ID = 943726651399864330
     WEBHOOK_NAME = "Arifin"
     _webhook_cache = {}
+    first_run = True
 
     while not bot.is_closed():
-        await asyncio.sleep(10)  # TODO: ganti ke 7200 setelah testing
+        if not first_run:
+            await asyncio.sleep(10)  # TODO: ganti ke 7200 setelah testing
+        first_run = False
         now = datetime.utcnow()
 
         for guild in bot.guilds:
