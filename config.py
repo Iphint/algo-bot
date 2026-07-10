@@ -18,8 +18,8 @@ STUDENT_SHEET = "students"
 LOG_SHEET = "discord_log"
 WARNING_SHEET = "warnings"
 
-# Profanity filter - exempt roles (Admin/Owner always exempt)
-EXEMPT_ROLES = ["Administrator", "Owner"]
+# Profanity filter - exempt roles (Moderator, Admin, Owner always exempt)
+EXEMPT_ROLES = ["Moderator", "Administrator", "Owner"]
 
 # Profanity filter - exempt user IDs (moderator-specific)
 PROFANITY_EXEMPT_IDS = [
