@@ -347,7 +347,7 @@ async def auto_welcome_loop():
     _webhook_cache = {}
 
     while not bot.is_closed():
-        await asyncio.sleep(7200)
+        await asyncio.sleep(10)  # TODO: ganti ke 7200 setelah testing
         now = datetime.utcnow()
 
         for guild in bot.guilds:
