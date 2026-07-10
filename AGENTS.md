@@ -40,6 +40,16 @@ pip install -r requirements.txt
 - `pending_intro` is an in-memory dict — lost on restart
 - `on_member_remove` marks user `INACTIVE` in `discord_log` sheet
 
+## Spam filter
+
+- Runs in `on_message`, skips channels matching `SPAM_SKIP_CHANNELS` in `config.py`
+- Detects: rapid-fire (6+ messages in 5s), duplicate messages (3+), mass mentions (5+), suspicious scam domains, spam patterns (fake Nitro/crypto giveaways, shortened URLs), all-caps
+- Violations reuse the same `warnings` sheet and warning progression system (1-3 role → 4 timeout 1d → 5 timeout 5d → 6 ban)
+- `SpamTracker` class in `discord_bot/spam_filter.py` maintains in-memory per-user message history (auto-cleanup every 5 min)
+- To adjust thresholds: edit `SPAM_RATE_LIMIT`, `SPAM_RATE_WINDOW`, etc. in `config.py`
+- To add scam domains: edit `SCAM_DOMAINS` in `discord_bot/spam_filter.py`
+- To add spam patterns: edit `SPAM_PATTERNS` in `discord_bot/spam_filter.py`
+
 ## Profanity filter & warning system
 
 - Filter runs in `on_message`, skips channels with "admin"/"mod" in name, skips roles in `EXEMPT_ROLES`

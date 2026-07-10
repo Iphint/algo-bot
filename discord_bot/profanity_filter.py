@@ -24,7 +24,6 @@ PROFANITY_LIST_EN = [
 
 ALL_PROFANITY = set(PROFANITY_LIST_ID + PROFANITY_LIST_EN)
 
-
 def contains_profanity(text: str) -> list[str]:
     words = re.findall(r"[\w\u00C0-\u024F]+", text.lower())
     found = [w for w in words if w in ALL_PROFANITY]

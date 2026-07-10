@@ -18,8 +18,15 @@ STUDENT_SHEET = "students"
 LOG_SHEET = "discord_log"
 WARNING_SHEET = "warnings"
 
-# Profanity filter - exempt roles
-EXEMPT_ROLES = ["Moderator", "Administrator", "Owner"]
+# Profanity filter - exempt roles (Admin/Owner always exempt)
+EXEMPT_ROLES = ["Administrator", "Owner"]
+
+# Profanity filter - exempt user IDs (moderator-specific)
+PROFANITY_EXEMPT_IDS = [
+    943726651399864330,  # Arifin
+    1407622673130983555, # Kak Nad
+    1385603832293228658, # Arsa
+]
 
 # Warning roles
 WARNING_ROLES = {
@@ -27,6 +34,17 @@ WARNING_ROLES = {
     2: "⚠️ Warning 2",
     3: "⚠️ Warning 3",
 }
+
+# Spam filter config
+SPAM_RATE_LIMIT = 4       # max messages in window (rapid fire)
+SPAM_RATE_WINDOW = 5      # window in seconds
+SPAM_BURST_LIMIT = 3      # consecutive messages in short window
+SPAM_BURST_WINDOW = 2     # short window in seconds
+SPAM_DUPLICATE_THRESHOLD = 3
+SPAM_MAX_MENTIONS = 5
+SPAM_ALL_CAPS_MIN_LEN = 10
+SPAM_ALL_CAPS_RATIO = 0.7
+SPAM_SKIP_CHANNELS = ["admin", "mod", "logs"]
 
 # Course → Role map
 COURSE_ROLE_MAP = [

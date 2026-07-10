@@ -1,7 +1,7 @@
 from datetime import datetime
 from google.oauth2 import service_account # type: ignore
 from googleapiclient.discovery import build # type: ignore
-from config import SCOPES, SPREADSHEET_ID, STUDENT_SHEET, LOG_SHEET, COURSE_SHEET_MAP, WARNING_SHEET
+from config import SCOPES, SPREADSHEET_ID, LOG_SHEET, COURSE_SHEET_MAP, WARNING_SHEET
 
 creds = service_account.Credentials.from_service_account_file(
     "credentials.json",
@@ -12,6 +12,7 @@ service = build("sheets", "v4", credentials=creds)
 sheet = service.spreadsheets()
 
 user_row_cache = {}
+warning_cache = {}
 
 def update_status_by_discord_id(discord_id, new_status):
     global user_row_cache
@@ -299,9 +300,6 @@ def get_joined_students_by_date_range(start_date, end_date):
 
     return joined_students
 
-
-warning_cache = {}
-
 def get_user_warning_count(discord_id):
     global warning_cache
     if discord_id in warning_cache:
@@ -327,7 +325,6 @@ def get_user_warning_count(discord_id):
         print(f"❌ Error getting warning count: {e}")
 
     return 0
-
 
 def increment_warning(discord_id, word_used):
     global warning_cache
@@ -372,7 +369,6 @@ def increment_warning(discord_id, word_used):
         print(f"❌ Error incrementing warning: {e}")
 
     return new_count
-
 
 def reset_warning(discord_id):
     global warning_cache
