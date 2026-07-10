@@ -136,6 +136,11 @@ async def on_member_join(member):
             color=0x2ecc71
         )
         await channel.send(embed=embed, view=VerifyView())
+    intro_channel = discord.utils.get(guild.text_channels, name="kenalan-dulu")
+    if intro_channel:
+        welcome_msg = get_intro_message([member])
+        await intro_channel.send(welcome_msg)
+
     pending_intro[member.id] = {
         "time": datetime.utcnow(),
         "replied": False
