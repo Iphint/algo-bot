@@ -354,7 +354,7 @@ async def auto_welcome_loop():
 
     while not bot.is_closed():
         if not first_run:
-            await asyncio.sleep(10)  # TODO: ganti ke 7200 setelah testing
+            await asyncio.sleep(3600)
         first_run = False
         now = datetime.utcnow()
 
