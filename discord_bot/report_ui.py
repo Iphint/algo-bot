@@ -74,7 +74,7 @@ class StudentAccountReportModal(Modal, title="🎓 Report Akun Siswa"):
 
     issue_type = TextInput(
         label="Jenis Kendala",
-        placeholder="Tidak bisa login / lupa password / salah role / gagal verify",
+        placeholder="Tidak bisa login / lupa password / salah role",
         required=True,
         max_length=100
     )

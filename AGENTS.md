@@ -23,9 +23,8 @@ pip install -r requirements.txt
 - `main.py` — entrypoint; imports events and commands, runs bot
 - `config.py` — env vars, intents, role/sheet maps
 - `discord_bot/bot.py` — `commands.Bot` instance
-- `discord_bot/commands.py` — prefix commands (`!test`, `!recheck`, `!sendverify`, `!progress`, `!joined`, `!intro_stats`)
+- `discord_bot/commands.py` — prefix commands (`!test`, `!recheck`, `!progress`, `!joined`, `!intro_stats`)
 - `discord_bot/events.py` — `on_ready`, `on_member_join`, `on_member_remove`, `on_message`, pending-intro checker loop
-- `discord_bot/verify_ui.py` — modal-based student verification (Google Sheets lookup)
 - `discord_bot/report_ui.py` — safety + student report modals
 - `discord_bot/roles.py` — course-to-role assignment based on `COURSE_ROLE_MAP`
 - `discord_bot/profanity_filter.py` — profanity detection (ID + EN word lists)
@@ -34,7 +33,6 @@ pip install -r requirements.txt
 ## Key conventions
 
 - Commands use prefix `!` (not slash commands, despite `tree.sync` in `on_ready`)
-- Student verification is modal-based (`VerifyModal`), validates against Sheets `students`/`ps` tabs
 - Role names in config must match Discord server role names exactly (e.g. `"🐍 Python Student"`, `"🏅 | Verified Student"`, `"Unverified Student"`)
 - `COURSE_ROLE_MAP` does substring matching on course name
 - `pending_intro` is an in-memory dict — lost on restart

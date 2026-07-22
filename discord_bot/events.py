@@ -1,7 +1,6 @@
 import discord # type: ignore
 from discord_bot.bot import bot
 from services.google_sheet import update_status_by_discord_id, get_user_warning_count, increment_warning, reset_warning
-from discord_bot.verify_ui import VerifyView
 from discord_bot.templates import get_intro_message
 from discord_bot.report_ui import (
     ReportCenterView,
@@ -16,6 +15,7 @@ from datetime import datetime, timedelta
 import asyncio
 
 pending_intro = {}
+pending_verification = {}
 last_welcome_check = datetime.utcnow()
 
 NEW_MEMBER_MODERATOR_IDS = [
@@ -26,14 +26,13 @@ NEW_MEMBER_MODERATOR_IDS = [
 
 @bot.event
 async def on_ready():
-    bot.add_view(VerifyView())
-
     bot.add_view(ReportCenterView())
     bot.add_view(StudentReportView())
 
     await setup_report_panels()
 
     bot.loop.create_task(check_pending_intro())
+    bot.loop.create_task(check_pending_verification())
     bot.loop.create_task(auto_welcome_loop())
     print(f"✅ Bot aktif sebagai {bot.user}")
 
@@ -91,7 +90,7 @@ async def ensure_student_report_panel(channel):
             "🔐 Tidak bisa login\n"
             "🔑 Lupa password\n"
             "🏷️ Salah role\n"
-            "✅ Gagal verifikasi\n"
+            "✅ Gagal akses\n"
             "🚪 Tidak bisa akses channel\n\n"
             "Laporan akan masuk ke spreadsheet sheet `student-reports`."
         ),
@@ -112,7 +111,7 @@ async def notify_moderators_new_member(member):
                     f"Username: `{member}`\n"
                     f"User ID: `{member.id}`\n"
                     f"Server: **{member.guild.name}**\n\n"
-                    f"➡️ Mohon pantau proses verifikasi dan intro user ini."
+                    f"➡️ Mohon pantau proses intro user ini."
                 )
 
         except Exception as e:
@@ -122,20 +121,6 @@ async def notify_moderators_new_member(member):
 async def on_member_join(member):
     guild = member.guild
     await notify_moderators_new_member(member)
-    unverified_role = discord.utils.get(guild.roles, name="Unverified")
-    if unverified_role:
-        await member.add_roles(unverified_role)
-    channel = discord.utils.get(guild.text_channels, name="verify")
-    if channel:
-        embed = discord.Embed(
-            title=f"👋 Selamat datang {member.name}!",
-            description=(
-                "Silakan klik tombol di bawah untuk memverifikasi akun kamu.\n\n"
-                "⚠️ Username & password akan **rahasia** dan hanya kamu yang melihat pesan verifikasi."
-            ),
-            color=0x2ecc71
-        )
-        await channel.send(embed=embed, view=VerifyView())
     intro_channel = discord.utils.get(guild.text_channels, name="kenalan-dulu")
     if intro_channel:
         welcome_msg = get_intro_message([member])
@@ -144,6 +129,11 @@ async def on_member_join(member):
     pending_intro[member.id] = {
         "time": datetime.utcnow(),
         "replied": False
+    }
+
+    pending_verification[member.id] = {
+        "time": datetime.utcnow(),
+        "notified": False
     }
 
 @bot.event
@@ -447,6 +437,72 @@ async def check_pending_intro():
 
         await asyncio.sleep(600)  # cek tiap 10 menit
         # await asyncio.sleep(20)  # cek tiap 20 detik
+
+async def check_pending_verification():
+    await bot.wait_until_ready()
+
+    VERIFY_MODERATOR_IDS = [
+        943726651399864330,
+        1407622673130983555,
+    ]
+
+    while not bot.is_closed():
+        now = datetime.utcnow()
+
+        for guild in bot.guilds:
+            for member in guild.members:
+                if member.bot:
+                    continue
+                if member.id not in pending_verification and member.joined_at:
+                    pending_verification[member.id] = {
+                        "time": member.joined_at.replace(tzinfo=None),
+                        "notified": False
+                    }
+
+            for user_id, data in list(pending_verification.items()):
+                if data["notified"]:
+                    continue
+
+                if now - data["time"] <= timedelta(hours=24):
+                    continue
+
+                member = guild.get_member(user_id)
+                if not member or member.bot:
+                    pending_verification[user_id]["notified"] = True
+                    continue
+
+                verified_role = discord.utils.get(guild.roles, name="🏅 | Verified Student")
+                already_verified = verified_role and verified_role in member.roles
+
+                if not already_verified:
+                    try:
+                        await member.send(
+                            "⚠️ **Kamu belum menyelesaikan verifikasi aturan di #rules.**\n\n"
+                            "Silakan ke **#rules** dan centang persetujuan aturan server "
+                            "agar bisa mengakses channel-channel lainnya."
+                        )
+                    except Exception:
+                        pass
+
+                    for mod_id in VERIFY_MODERATOR_IDS:
+                        try:
+                            mod = await bot.fetch_user(mod_id)
+                            if mod:
+                                await mod.send(
+                                    f"⚠️ **User belum verifikasi aturan > 24 jam**\n\n"
+                                    f"User: {member.mention}\n"
+                                    f"Username: `{member}`\n"
+                                    f"User ID: `{member.id}`\n"
+                                    f"Join: {data['time'].strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                                    f"➡️ User **belum** menyelesaikan verifikasi aturan di #rules."
+                                )
+                        except Exception:
+                            pass
+
+                pending_verification[user_id]["notified"] = True
+
+        await asyncio.sleep(10)
+
 
 @bot.event
 async def on_member_remove(member: discord.Member):

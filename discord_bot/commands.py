@@ -33,19 +33,6 @@ async def recheck(ctx):
     await ctx.send(f"✅ Recheck selesai. {count} member diperbaiki.")
 
 @bot.command()
-@commands.has_role("Moderator")
-async def sendverify(ctx):
-    from discord_bot.verify_ui import VerifyView
-
-    embed = discord.Embed(
-        title="🎓 Student Verification",
-        description="Klik tombol di bawah untuk verifikasi akun kamu.",
-        color=0x2ecc71
-    )
-
-    await ctx.send(embed=embed, view=VerifyView())
-
-@bot.command()
 @commands.has_any_role("Moderator", "Administrator")
 async def progress(ctx, *, args):
     print("🔥 PROGRESS COMMAND TRIGGERED")
