@@ -454,8 +454,7 @@ async def check_pending_verification():
     await bot.wait_until_ready()
 
     VERIFY_MODERATOR_IDS = [
-        943726651399864330,
-        1407622673130983555,
+        943726651399864330
     ]
 
     while not bot.is_closed():
