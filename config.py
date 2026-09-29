@@ -35,6 +35,9 @@ WARNING_ROLES = {
     3: "⚠️ Warning 3",
 }
 
+# Verified role
+VERIFIED_ROLE = "🏅 | Verified Student"
+
 # Spam filter config
 SPAM_RATE_LIMIT = 4       # max messages in window (rapid fire)
 SPAM_RATE_WINDOW = 5      # window in seconds

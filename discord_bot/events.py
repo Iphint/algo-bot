@@ -10,7 +10,7 @@ from discord_bot.report_ui import (
 )
 from discord_bot.profanity_filter import contains_profanity
 from discord_bot.spam_filter import check_spam, tracker as spam_tracker
-from config import EXEMPT_ROLES, PROFANITY_EXEMPT_IDS, WARNING_ROLES, SPAM_SKIP_CHANNELS
+from config import EXEMPT_ROLES, PROFANITY_EXEMPT_IDS, WARNING_ROLES, SPAM_SKIP_CHANNELS, VERIFIED_ROLE
 from datetime import datetime, timedelta
 import asyncio
 
@@ -120,6 +120,18 @@ async def notify_moderators_new_member(member):
 @bot.event  
 async def on_member_join(member):
     guild = member.guild
+
+    if not member.bot:
+        verified_role = discord.utils.get(guild.roles, name=VERIFIED_ROLE)
+        if verified_role:
+            try:
+                await member.add_roles(verified_role, reason="Auto assign Verified Student role on join")
+                print(f"✅ Role '{VERIFIED_ROLE}' berhasil diberikan ke {member.name} ({member.id})")
+            except Exception as e:
+                print(f"❌ Gagal memberikan role '{VERIFIED_ROLE}' ke {member.name}: {e}")
+        else:
+            print(f"⚠️ Role '{VERIFIED_ROLE}' tidak ditemukan di server '{guild.name}'")
+
     await notify_moderators_new_member(member)
     intro_channel = discord.utils.get(guild.text_channels, name="kenalan-dulu")
     if intro_channel:
@@ -471,7 +483,7 @@ async def check_pending_verification():
                     pending_verification[user_id]["notified"] = True
                     continue
 
-                verified_role = discord.utils.get(guild.roles, name="🏅 | Verified Student")
+                verified_role = discord.utils.get(guild.roles, name=VERIFIED_ROLE)
                 already_verified = verified_role and verified_role in member.roles
 
                 if not already_verified:
