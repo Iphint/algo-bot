@@ -436,28 +436,60 @@ async def intro_stats(ctx, *args):
         await ctx.send("❌ Gunakan command ini di server.")
         return
 
-    await ctx.send("⏳ Menghitung data intro dan join...")
+    raw_args = " ".join(args).strip()
 
     try:
-        if len(args) == 1:
-            d, m, y = map(int, args[0].split("-"))
-            start_date = datetime(y, m, d)
-            end_date = start_date + timedelta(days=1)
-            date_label = args[0]
-        elif len(args) == 2:
-            d1, m1, y1 = map(int, args[0].split("-"))
-            d2, m2, y2 = map(int, args[1].split("-"))
-            start_date = datetime(y1, m1, d1)
-            end_date = datetime(y2, m2, d2) + timedelta(days=1)
-            date_label = f"{args[0]} ➜ {args[1]}"
-        else:
+        if not raw_args:
             start_date = datetime.utcnow() - timedelta(days=7)
             end_date = datetime.utcnow()
             date_label = "7 hari terakhir"
+        else:
+            match_words_range = re.search(
+                r"tgl (\d+) bulan (\d+) tahun (\d+) sampai tgl (\d+) bulan (\d+) tahun (\d+)",
+                raw_args.lower()
+            )
+            match_words_single = re.search(
+                r"tgl (\d+) bulan (\d+) tahun (\d+)",
+                raw_args.lower()
+            )
+            date_matches = re.findall(r"(\d{1,2})[-/](\d{1,2})[-/](\d{4})", raw_args)
+
+            if match_words_range:
+                d1, m1, y1, d2, m2, y2 = map(int, match_words_range.groups())
+                start_date = datetime(y1, m1, d1)
+                end_date = datetime(y2, m2, d2) + timedelta(days=1)
+                date_label = f"{d1}-{m1}-{y1} ➜ {d2}-{m2}-{y2}"
+            elif match_words_single:
+                d, m, y = map(int, match_words_single.groups())
+                start_date = datetime(y, m, d)
+                end_date = start_date + timedelta(days=1)
+                date_label = f"{d}-{m}-{y}"
+            elif len(date_matches) >= 2:
+                d1, m1, y1 = map(int, date_matches[0])
+                d2, m2, y2 = map(int, date_matches[1])
+                start_date = datetime(y1, m1, d1)
+                end_date = datetime(y2, m2, d2) + timedelta(days=1)
+                date_label = f"{d1}-{m1}-{y1} ➜ {d2}-{m2}-{y2}"
+            elif len(date_matches) == 1:
+                d, m, y = map(int, date_matches[0])
+                start_date = datetime(y, m, d)
+                end_date = start_date + timedelta(days=1)
+                date_label = f"{d}-{m}-{y}"
+            else:
+                raise ValueError("Format tanggal salah")
+
     except Exception:
-        start_date = datetime.utcnow() - timedelta(days=7)
-        end_date = datetime.utcnow()
-        date_label = "7 hari terakhir"
+        await ctx.send(
+            "❌ Format tanggal salah!\n\n"
+            "📌 Contoh penggunaan:\n"
+            "`!intro_stats 19-10-2026 25-10-2026`\n"
+            "`!intro_stats 19-10-2026`\n"
+            "`!intro_stats` *(default 7 hari terakhir)*\n"
+            "`!intro_stats tgl 19 bulan 10 tahun 2026 sampai tgl 25 bulan 10 tahun 2026`"
+        )
+        return
+
+    await ctx.send("⏳ Menghitung data join, intro, dan aktivitas main-chat...")
 
     guild = ctx.guild
 
@@ -470,61 +502,136 @@ async def intro_stats(ctx, *args):
             if start_date <= joined_at < end_date:
                 joined_users.append(member)
 
-    intro_channel = discord.utils.get(guild.text_channels, name="kenalan-dulu")
-    responded_user_ids = set()
+    total_joined = len(joined_users)
+    joined_user_ids = {m.id for m in joined_users}
 
+    intro_channel = discord.utils.get(guild.text_channels, name="kenalan-dulu")
+    if not intro_channel:
+        intro_channel = discord.utils.find(lambda c: "kenalan" in c.name.lower(), guild.text_channels)
+
+    main_chat = discord.utils.get(guild.text_channels, name="main-chat")
+    if not main_chat:
+        main_chat = discord.utils.find(
+            lambda c: "main-chat" in c.name.lower() or "main_chat" in c.name.lower() or c.name.lower() == "mainchat",
+            guild.text_channels
+        )
+
+    if total_joined == 0:
+        result = (
+            f"📋 **Intro & Activity Report — Kenalan Dulu & Main Chat**\n\n"
+            f"📅 Periode: **{date_label}**\n"
+            f"📍 Kenalan: {intro_channel.mention if intro_channel else '#kenalan-dulu'}\n"
+            f"📍 Main Chat: {main_chat.mention if main_chat else '#main-chat'}\n\n"
+            f"👥 **Join Activity**\n"
+            f"➡️ Total User Baru Join: **0**\n\n"
+            f"ℹ️ Tidak ada user baru yang bergabung pada periode ini."
+        )
+        progress_channel = discord.utils.get(guild.text_channels, name="progress")
+        if progress_channel:
+            await progress_channel.send(result)
+            await ctx.send("✅ Intro stats berhasil dikirim ke #progress.")
+        else:
+            await ctx.send(result)
+        return
+
+    # 1. Scan kenalan-dulu (apakah sudah sapa/intro)
+    intro_respondent_ids = set()
     if intro_channel:
         try:
-            async for message in intro_channel.history(limit=None):
+            async for message in intro_channel.history(limit=None, after=start_date, before=end_date):
                 if message.author.bot:
                     continue
-                if message.created_at.replace(tzinfo=None) >= start_date:
-                    responded_user_ids.add(message.author.id)
+                if message.created_at.replace(tzinfo=None) >= end_date:
+                    break
+                if message.author.id in joined_user_ids:
+                    intro_respondent_ids.add(message.author.id)
         except Exception as e:
             print(f"❌ Error scan kenalan-dulu: {e}")
 
-    total_joined = len(joined_users)
-    intro_respondents = [m for m in joined_users if m.id in responded_user_ids]
-    no_intro = [m for m in joined_users if m.id not in responded_user_ids]
+    # 2. Scan main-chat (hitung percakapan user baru)
+    user_main_chat_counts = {uid: 0 for uid in joined_user_ids}
+    total_main_chat_messages = 0
 
-    total_responded = len(intro_respondents)
+    if main_chat:
+        try:
+            async for message in main_chat.history(limit=None, after=start_date, before=end_date):
+                if message.author.bot:
+                    continue
+                if message.created_at.replace(tzinfo=None) >= end_date:
+                    break
+                uid = message.author.id
+                if uid in user_main_chat_counts:
+                    user_main_chat_counts[uid] += 1
+                    total_main_chat_messages += 1
+        except Exception as e:
+            print(f"❌ Error scan main-chat: {e}")
+
+    # 3. Klasifikasi Intro Kenalan Dulu
+    intro_respondents = [m for m in joined_users if m.id in intro_respondent_ids]
+    no_intro = [m for m in joined_users if m.id not in intro_respondent_ids]
+    total_intro = len(intro_respondents)
     total_no_intro = len(no_intro)
-    response_rate = (
-        round((total_responded / total_joined) * 100, 2)
-        if total_joined > 0
-        else 0
-    )
+    intro_rate = round((total_intro / total_joined) * 100, 2)
 
-    responded_list = "\n".join(
-        [f"- {m.display_name}" for m in intro_respondents[:20]]
-    ) or "-"
-    no_intro_list = "\n".join(
-        [f"- {m.display_name}" for m in no_intro[:20]]
-    ) or "-"
+    # 4. Klasifikasi Aktivitas Main Chat (Parameter aktif: percakapan > 1)
+    active_members = []
+    inactive_members = []
 
-    if len(intro_respondents) > 20:
-        responded_list += f"\n... dan {len(intro_respondents) - 20} user lainnya"
-    if len(no_intro) > 20:
-        no_intro_list += f"\n... dan {len(no_intro) - 20} user lainnya"
+    for m in joined_users:
+        msg_count = user_main_chat_counts.get(m.id, 0)
+        if msg_count > 1:
+            active_members.append((m, msg_count))
+        else:
+            inactive_members.append((m, msg_count))
+
+    # Urutkan aktif dari pesan terbanyak
+    active_members.sort(key=lambda x: (-x[1], x[0].display_name.lower()))
+    # Urutkan belum aktif (yang punya 1 pesan di atas yang 0 pesan)
+    inactive_members.sort(key=lambda x: (-x[1], x[0].display_name.lower()))
+
+    total_active = len(active_members)
+    total_inactive = len(inactive_members)
+    active_rate = round((total_active / total_joined) * 100, 2)
+    inactive_rate = round((total_inactive / total_joined) * 100, 2)
+
+    count_1_msg = sum(1 for _, c in inactive_members if c == 1)
+    count_0_msg = sum(1 for _, c in inactive_members if c == 0)
+
+    # Preview max 15 nama
+    active_preview_lines = [f"- {m.display_name} ({count} pesan)" for m, count in active_members[:15]]
+    active_preview = "\n".join(active_preview_lines) if active_preview_lines else "-"
+    if len(active_members) > 15:
+        active_preview += f"\n... dan {len(active_members) - 15} user lainnya"
+
+    inactive_preview_lines = [f"- {m.display_name} ({count} pesan)" for m, count in inactive_members[:15]]
+    inactive_preview = "\n".join(inactive_preview_lines) if inactive_preview_lines else "-"
+    if len(inactive_members) > 15:
+        inactive_preview += f"\n... dan {len(inactive_members) - 15} user lainnya"
 
     result = (
-        f"📋 **Intro Report — Kenalan Dulu**\n\n"
+        f"📋 **Intro & Activity Report — Kenalan Dulu & Main Chat**\n\n"
         f"📅 Periode: **{date_label}**\n"
-        f"📍 Channel: {intro_channel.mention if intro_channel else '#kenalan-dulu'}\n\n"
+        f"📍 Kenalan: {intro_channel.mention if intro_channel else '#kenalan-dulu'}\n"
+        f"📍 Main Chat: {main_chat.mention if main_chat else '#main-chat'}\n\n"
 
         f"👥 **Join Activity**\n"
-        f"➡️ Total Join: **{total_joined}**\n\n"
+        f"➡️ Total User Baru Join: **{total_joined}**\n\n"
 
-        f"🙋 **Intro Engagement**\n"
-        f"✅ Sudah Intro: **{total_responded}**\n"
-        f"💤 Belum Intro: **{total_no_intro}**\n"
-        f"📊 Response Rate: **{response_rate}%**\n\n"
+        f"🙋 **Kenalan Dulu (Intro)**\n"
+        f"✅ Sudah Intro: **{total_intro}** ({intro_rate}%)\n"
+        f"💤 Belum Intro: **{total_no_intro}**\n\n"
 
-        f"✅ **User yang Sudah Intro:**\n"
-        f"{responded_list}\n\n"
+        f"💬 **Percakapan User Baru (Main Chat)**\n"
+        f"📝 Total Pesan: **{total_main_chat_messages}**\n"
+        f"🔥 **User Aktif (> 1 chat):** **{total_active}** ({active_rate}%)\n"
+        f"💤 **User Belum Aktif (≤ 1 chat):** **{total_inactive}** ({inactive_rate}%)\n"
+        f"*(Detail: {count_1_msg} user kirim 1 chat, {count_0_msg} user belum pernah chat)*\n\n"
 
-        f"💤 **User yang Belum Intro:**\n"
-        f"{no_intro_list}"
+        f"🔥 **User yang Sudah Aktif (> 1 chat):**\n"
+        f"{active_preview}\n\n"
+
+        f"💤 **User yang Belum Aktif (≤ 1 chat):**\n"
+        f"{inactive_preview}"
     )
 
     progress_channel = discord.utils.get(guild.text_channels, name="progress")

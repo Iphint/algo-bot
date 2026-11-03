@@ -155,11 +155,12 @@ async def on_message(message):
     print("📩 Message:", message.content)
 
     if message.guild is not None:
-        if hasattr(message.channel, "name") and message.channel.name == "kenalan-dulu":
+        channel_name = getattr(message.channel, "name", "").lower()
+        if "kenalan" in channel_name or "main-chat" in channel_name or channel_name == "main-chat":
             user_id = message.author.id
             if user_id in pending_intro:
                 pending_intro[user_id]["replied"] = True
-                print(f"✅ {message.author} sudah intro")
+                print(f"✅ {message.author} sudah aktif chat di #{message.channel.name}")
 
         await handle_profanity_filter(message)
         await handle_spam_filter(message)
