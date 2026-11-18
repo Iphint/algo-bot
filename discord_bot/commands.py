@@ -4,6 +4,7 @@ from discord_bot.bot import bot
 from services.google_sheet import (
     get_user_log_status,
 )
+from config import VERIFIED_ROLE, ALGO_HC_ROLE, ALGO_HC_CATEGORY, ALGO_HC_DISCUSSION_CHANNEL
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -25,12 +26,131 @@ async def recheck(ctx):
         status = get_user_log_status(member.id)
 
         if status == "ACTIVE":
-            verified_role = discord.utils.get(guild.roles, name="Verified")
+            verified_role = discord.utils.get(guild.roles, name=VERIFIED_ROLE)
             if verified_role and verified_role not in member.roles:
                 await member.add_roles(verified_role)
                 count += 1
 
     await ctx.send(f"✅ Recheck selesai. {count} member diperbaiki.")
+
+@bot.command(aliases=["hc_invite"])
+@commands.has_permissions(administrator=True)
+async def create_hc_invite(ctx):
+    guild = ctx.guild
+    hc_channel = discord.utils.find(
+        lambda c: ("discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL) and getattr(getattr(c, "category", None), "name", "").lower() == ALGO_HC_CATEGORY.lower(),
+        guild.text_channels
+    )
+    if not hc_channel:
+        hc_channel = discord.utils.find(
+            lambda c: "discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL,
+            guild.text_channels
+        )
+
+    if not hc_channel:
+        await ctx.send(f"❌ Channel discussion untuk kategori `{ALGO_HC_CATEGORY}` tidak ditemukan.")
+        return
+
+    try:
+        invite = await hc_channel.create_invite(
+            max_age=0,   # Tidak kedaluwarsa
+            max_uses=0,  # Pemakaian tanpa batas
+            unique=True,
+            reason="Link Invite Khusus Algo HC 2026"
+        )
+        from discord_bot.events import known_algo_hc_codes, cache_guild_invites
+        known_algo_hc_codes.add(invite.code)
+        await cache_guild_invites(guild)
+
+        await ctx.send(
+            f"✅ **Link Invite Algo HC 2026 Berhasil Dibuat!**\n\n"
+            f"🔗 **Link:** {invite.url}\n"
+            f"📍 **Target Channel:** {hc_channel.mention}\n"
+            f"🏷️ **Auto Role:** `{ALGO_HC_ROLE}`\n\n"
+            f"ℹ️ Siapa pun yang bergabung via link ini otomatis hanya mendapatkan role `{ALGO_HC_ROLE}` "
+            f"dan hanya bisa mengakses 2 channel Algo HC."
+        )
+    except Exception as e:
+        await ctx.send(f"❌ Gagal membuat link invite Algo HC: {e}")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def register_hc_invite(ctx, invite_input: str):
+    code = invite_input.split("/")[-1].strip()
+    if not code:
+        await ctx.send("❌ Masukkan kode atau link invite yang valid.")
+        return
+
+    from discord_bot.events import known_algo_hc_codes
+    known_algo_hc_codes.add(code)
+    await ctx.send(f"✅ Kode invite `{code}` berhasil didaftarkan sebagai link khusus Algo HC 2026!")
+
+@bot.command(aliases=["lock_algohc"])
+@commands.has_permissions(administrator=True)
+async def auto_lock_algohc(ctx):
+    """Otomatis mengunci/menyembunyikan semua kategori & channel selain Algo HC dari role Algo HC 2026."""
+    guild = ctx.guild
+    algo_role = discord.utils.get(guild.roles, name=ALGO_HC_ROLE)
+    if not algo_role:
+        await ctx.send(f"❌ Role `{ALGO_HC_ROLE}` tidak ditemukan di server.")
+        return
+
+    await ctx.send(f"⏳ Sedang mengunci semua kategori & channel dari role `{ALGO_HC_ROLE}` secara otomatis...")
+
+    count_categories = 0
+    count_channels = 0
+
+    # 1. Kunci pada level kategori (dan channel yang unsynced di dalamnya)
+    for category in guild.categories:
+        cat_name = category.name.lower()
+        if "algo hc" in cat_name or "algohc" in cat_name:
+            # Pastikan kategori Algo HC diizinkan
+            try:
+                await category.set_permissions(algo_role, view_channel=True, send_messages=True)
+            except Exception as e:
+                print(f"⚠️ Gagal set permission kategori {category.name}: {e}")
+            continue
+
+        # Kunci kategori lain
+        try:
+            await category.set_permissions(algo_role, view_channel=False)
+            count_categories += 1
+        except Exception as e:
+            print(f"⚠️ Gagal set permission kategori {category.name}: {e}")
+
+        # Pastikan channel unsynced di dalamnya juga terkunci
+        for ch in category.channels:
+            if hasattr(ch, "permissions_synced") and not ch.permissions_synced:
+                try:
+                    await ch.set_permissions(algo_role, view_channel=False)
+                    count_channels += 1
+                except Exception:
+                    pass
+
+    # 2. Kunci channel-channel mandiri yang tidak berada di bawah kategori apa pun
+    for channel in guild.text_channels:
+        if channel.category is None:
+            c_name = channel.name.lower()
+            if "algo" not in c_name and "hc" not in c_name:
+                try:
+                    await channel.set_permissions(algo_role, view_channel=False)
+                    count_channels += 1
+                except Exception:
+                    pass
+
+    await ctx.send(
+        f"✅ **Selesai!** Berhasil mengunci **{count_categories} kategori** dan **{count_channels} channel** "
+        f"dari role `{ALGO_HC_ROLE}`.\n\n"
+        f"Sekarang siswa dengan role `{ALGO_HC_ROLE}` dijamin **hanya bisa melihat kategori & channel Algo HC 2026**!"
+    )
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def setup_invite_panel(ctx):
+    """Deploy panel button generator invite ke channel saat ini."""
+    from discord_bot.invite_ui import ensure_generate_invite_panel
+    await ensure_generate_invite_panel(ctx.channel)
+    await ctx.send("✅ Panel generator invite berhasil dipasang di channel ini!", delete_after=5)
 
 @bot.command()
 @commands.has_any_role("Moderator", "Administrator")

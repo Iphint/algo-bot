@@ -8,15 +8,65 @@ from discord_bot.report_ui import (
     REPORT_CENTER_CHANNEL,
     STUDENT_REPORT_CHANNEL
 )
+from discord_bot.invite_ui import (
+    GenerateInviteView,
+    GENERATE_INVITE_CHANNEL,
+    ensure_generate_invite_panel,
+)
 from discord_bot.profanity_filter import contains_profanity
 from discord_bot.spam_filter import check_spam, tracker as spam_tracker
-from config import EXEMPT_ROLES, PROFANITY_EXEMPT_IDS, WARNING_ROLES, SPAM_SKIP_CHANNELS, VERIFIED_ROLE
+from config import (
+    EXEMPT_ROLES,
+    PROFANITY_EXEMPT_IDS,
+    WARNING_ROLES,
+    SPAM_SKIP_CHANNELS,
+    VERIFIED_ROLE,
+    ALGO_HC_ROLE,
+    ALGO_HC_CATEGORY,
+    ALGO_HC_DISCUSSION_CHANNEL,
+    ALGO_HC_ANNOUNCEMENT_CHANNEL,
+    ALGO_HC_INVITE_CODES,
+)
 from datetime import datetime, timedelta
 import asyncio
 
 pending_intro = {}
 pending_verification = {}
 last_welcome_check = datetime.utcnow()
+
+guild_invites = {}
+known_algo_hc_codes = set(ALGO_HC_INVITE_CODES)
+
+
+async def cache_guild_invites(guild):
+    if not hasattr(guild, "me") or not guild.me or not getattr(guild.me.guild_permissions, "manage_guild", False):
+        return
+    try:
+        invites = await guild.invites()
+        guild_invites[guild.id] = {
+            inv.code: {
+                "uses": inv.uses,
+                "channel_id": getattr(inv.channel, "id", None),
+                "channel_name": getattr(inv.channel, "name", ""),
+                "category_name": getattr(getattr(inv.channel, "category", None), "name", "")
+            }
+            for inv in invites
+        }
+    except Exception as e:
+        print(f"⚠️ Gagal cache invite guild {guild.name}: {e}")
+
+
+def is_algo_hc_invite(code=None, channel_name="", category_name=""):
+    if code and code in known_algo_hc_codes:
+        return True
+    c_name = (channel_name or "").lower()
+    cat_name = (category_name or "").lower()
+    if "algo hc" in cat_name or "algohc" in cat_name:
+        return True
+    if "discussion" in c_name or "announcement" in c_name:
+        if "algo" in cat_name or "hc" in cat_name or "💬" in c_name or "📢" in c_name:
+            return True
+    return False
 
 NEW_MEMBER_MODERATOR_IDS = [
     943726651399864330, # Arifin
@@ -28,8 +78,12 @@ NEW_MEMBER_MODERATOR_IDS = [
 async def on_ready():
     bot.add_view(ReportCenterView())
     bot.add_view(StudentReportView())
+    bot.add_view(GenerateInviteView())
 
     await setup_report_panels()
+
+    for guild in bot.guilds:
+        await cache_guild_invites(guild)
 
     bot.loop.create_task(check_pending_intro())
     bot.loop.create_task(check_pending_verification())
@@ -48,11 +102,27 @@ async def setup_report_panels():
             name=STUDENT_REPORT_CHANNEL
         )
 
+        invite_channel = discord.utils.get(
+            guild.text_channels,
+            name=GENERATE_INVITE_CHANNEL
+        )
+        if not invite_channel:
+            invite_channel = discord.utils.find(
+                lambda c: "generate-link" in c.name.lower() or "invitation" in c.name.lower(),
+                guild.text_channels
+            )
+
         if report_center:
             await ensure_report_center_panel(report_center)
 
         if student_reports:
             await ensure_student_report_panel(student_reports)
+
+        if invite_channel:
+            print(f"🔍 Ditemukan channel invite: #{invite_channel.name}")
+            await ensure_generate_invite_panel(invite_channel)
+        else:
+            print(f"⚠️ Channel '{GENERATE_INVITE_CHANNEL}' tidak ditemukan/tidak dapat diakses bot di guild '{guild.name}'")
 
 async def ensure_report_center_panel(channel):
     async for message in channel.history(limit=20):
@@ -99,7 +169,8 @@ async def ensure_student_report_panel(channel):
 
     await channel.send(embed=embed, view=StudentReportView())
 
-async def notify_moderators_new_member(member):
+async def notify_moderators_new_member(member, is_algo_hc=False):
+    role_info = "Algo HC 2026 (Jalur Khusus Link Algo HC)" if is_algo_hc else "Verified Student (Jalur Umum)"
     for moderator_id in NEW_MEMBER_MODERATOR_IDS:
         try:
             moderator = await bot.fetch_user(moderator_id)
@@ -110,8 +181,9 @@ async def notify_moderators_new_member(member):
                     f"User: {member.mention}\n"
                     f"Username: `{member}`\n"
                     f"User ID: `{member.id}`\n"
+                    f"Kategori: **{role_info}**\n"
                     f"Server: **{member.guild.name}**\n\n"
-                    f"➡️ Mohon pantau proses intro user ini."
+                    f"➡️ Role otomatis telah dipasang."
                 )
 
         except Exception as e:
@@ -120,33 +192,121 @@ async def notify_moderators_new_member(member):
 @bot.event  
 async def on_member_join(member):
     guild = member.guild
+    used_invite_info = None
+    is_algo_hc = False
+
+    # Deteksi invite link yang digunakan
+    if hasattr(guild, "me") and guild.me and getattr(guild.me.guild_permissions, "manage_guild", False):
+        try:
+            new_invites = await guild.invites()
+            old_cache = guild_invites.get(guild.id, {})
+
+            # 1. Cari invite yang jumlah uses-nya bertambah
+            for inv in new_invites:
+                old_entry = old_cache.get(inv.code)
+                old_uses = old_entry["uses"] if old_entry else 0
+                if inv.uses > old_uses:
+                    channel_name = getattr(inv.channel, "name", "")
+                    category_name = getattr(getattr(inv.channel, "category", None), "name", "")
+                    used_invite_info = {
+                        "code": inv.code,
+                        "channel_name": channel_name,
+                        "category_name": category_name
+                    }
+                    break
+
+            # 2. Jika tidak ditemukan, cek apakah ada invite 1-use yang terhapus setelah dipakai
+            if not used_invite_info:
+                new_codes = {inv.code for inv in new_invites}
+                for code, old_entry in old_cache.items():
+                    if code not in new_codes:
+                        used_invite_info = {
+                            "code": code,
+                            "channel_name": old_entry.get("channel_name", ""),
+                            "category_name": old_entry.get("category_name", "")
+                        }
+                        break
+
+            # Update cache invite
+            guild_invites[guild.id] = {
+                inv.code: {
+                    "uses": inv.uses,
+                    "channel_id": getattr(inv.channel, "id", None),
+                    "channel_name": getattr(inv.channel, "name", ""),
+                    "category_name": getattr(getattr(inv.channel, "category", None), "name", "")
+                }
+                for inv in new_invites
+            }
+
+            if used_invite_info:
+                is_algo_hc = is_algo_hc_invite(
+                    used_invite_info.get("code"),
+                    used_invite_info.get("channel_name", ""),
+                    used_invite_info.get("category_name", "")
+                )
+                print(f"🔍 Member {member.name} join via invite '{used_invite_info.get('code')}' (Algo HC: {is_algo_hc})")
+        except Exception as e:
+            print(f"⚠️ Error deteksi invite saat member join: {e}")
 
     if not member.bot:
-        verified_role = discord.utils.get(guild.roles, name=VERIFIED_ROLE)
-        if verified_role:
-            try:
-                await member.add_roles(verified_role, reason="Auto assign Verified Student role on join")
-                print(f"✅ Role '{VERIFIED_ROLE}' berhasil diberikan ke {member.name} ({member.id})")
-            except Exception as e:
-                print(f"❌ Gagal memberikan role '{VERIFIED_ROLE}' ke {member.name}: {e}")
+        if is_algo_hc:
+            algo_role = discord.utils.get(guild.roles, name=ALGO_HC_ROLE)
+            if algo_role:
+                try:
+                    await member.add_roles(algo_role, reason="Auto assign Algo HC 2026 role via Algo HC invite")
+                    print(f"✅ Role '{ALGO_HC_ROLE}' berhasil diberikan ke {member.name} ({member.id}) via link Algo HC")
+                except Exception as e:
+                    print(f"❌ Gagal memberikan role '{ALGO_HC_ROLE}' ke {member.name}: {e}")
+            else:
+                print(f"⚠️ Role '{ALGO_HC_ROLE}' tidak ditemukan di server '{guild.name}'")
         else:
-            print(f"⚠️ Role '{VERIFIED_ROLE}' tidak ditemukan di server '{guild.name}'")
+            verified_role = discord.utils.get(guild.roles, name=VERIFIED_ROLE)
+            if verified_role:
+                try:
+                    await member.add_roles(verified_role, reason="Auto assign Verified Student role on join")
+                    print(f"✅ Role '{VERIFIED_ROLE}' berhasil diberikan ke {member.name} ({member.id})")
+                except Exception as e:
+                    print(f"❌ Gagal memberikan role '{VERIFIED_ROLE}' ke {member.name}: {e}")
+            else:
+                print(f"⚠️ Role '{VERIFIED_ROLE}' tidak ditemukan di server '{guild.name}'")
 
-    await notify_moderators_new_member(member)
-    intro_channel = discord.utils.get(guild.text_channels, name="kenalan-dulu")
-    if intro_channel:
-        welcome_msg = get_intro_message([member])
-        await intro_channel.send(welcome_msg)
+    await notify_moderators_new_member(member, is_algo_hc=is_algo_hc)
 
-    pending_intro[member.id] = {
-        "time": datetime.utcnow(),
-        "replied": False
-    }
+    if is_algo_hc:
+        # Sambut di channel discussion Algo HC
+        hc_discussion = discord.utils.find(
+            lambda c: ("discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL) and getattr(getattr(c, "category", None), "name", "").lower() == ALGO_HC_CATEGORY.lower(),
+            guild.text_channels
+        )
+        if not hc_discussion:
+            hc_discussion = discord.utils.find(
+                lambda c: "discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL,
+                guild.text_channels
+            )
 
-    pending_verification[member.id] = {
-        "time": datetime.utcnow(),
-        "notified": False
-    }
+        if hc_discussion:
+            welcome_hc_msg = f"Halo {member.mention}! 👋 Selamat datang di **Algo HC 2026**! Yuk langsung sapa teman-teman dan mulai diskusi santai di sini yaa 😄"
+            try:
+                await hc_discussion.send(welcome_hc_msg)
+            except Exception as e:
+                print(f"❌ Gagal kirim welcome di channel Algo HC: {e}")
+    else:
+        intro_channel = discord.utils.get(guild.text_channels, name="kenalan-dulu")
+        if not intro_channel:
+            intro_channel = discord.utils.find(lambda c: "kenalan" in c.name.lower(), guild.text_channels)
+        if intro_channel:
+            welcome_msg = get_intro_message([member])
+            await intro_channel.send(welcome_msg)
+
+        pending_intro[member.id] = {
+            "time": datetime.utcnow(),
+            "replied": False
+        }
+
+        pending_verification[member.id] = {
+            "time": datetime.utcnow(),
+            "notified": False
+        }
 
 @bot.event
 async def on_message(message):

@@ -38,6 +38,13 @@ WARNING_ROLES = {
 # Verified role
 VERIFIED_ROLE = "🏅 | Verified Student"
 
+# Algo HC 2026 Config
+ALGO_HC_ROLE = "Algo HC 2026"
+ALGO_HC_CATEGORY = "Algo HC 2026"
+ALGO_HC_DISCUSSION_CHANNEL = "💬・discussion"
+ALGO_HC_ANNOUNCEMENT_CHANNEL = "📢・announcements"
+ALGO_HC_INVITE_CODES = [c.strip() for c in os.getenv("ALGO_HC_INVITE_CODES", "").split(",") if c.strip()]
+
 # Spam filter config
 SPAM_RATE_LIMIT = 4       # max messages in window (rapid fire)
 SPAM_RATE_WINDOW = 5      # window in seconds
