@@ -13,6 +13,10 @@ from discord_bot.invite_ui import (
     GENERATE_INVITE_CHANNEL,
     ensure_generate_invite_panel,
 )
+from discord_bot.onboarding_ui import (
+    AlgoHCOnboardingLaunchView,
+    ensure_onboarding_panel,
+)
 from discord_bot.profanity_filter import contains_profanity
 from discord_bot.spam_filter import check_spam, tracker as spam_tracker
 from config import (
@@ -25,6 +29,9 @@ from config import (
     ALGO_HC_CATEGORY,
     ALGO_HC_DISCUSSION_CHANNEL,
     ALGO_HC_ANNOUNCEMENT_CHANNEL,
+    ALGO_HC_ONBOARDING_CHANNEL,
+    ROLE_PARENT,
+    ROLE_STUDENT,
     ALGO_HC_INVITE_CODES,
 )
 from datetime import datetime, timedelta
@@ -63,7 +70,7 @@ def is_algo_hc_invite(code=None, channel_name="", category_name=""):
     cat_name = (category_name or "").lower()
     if "algo hc" in cat_name or "algohc" in cat_name:
         return True
-    if "discussion" in c_name or "announcement" in c_name:
+    if "onboarding" in c_name or "discussion" in c_name or "announcement" in c_name:
         if "algo" in cat_name or "hc" in cat_name or "💬" in c_name or "📢" in c_name:
             return True
     return False
@@ -79,6 +86,7 @@ async def on_ready():
     bot.add_view(ReportCenterView())
     bot.add_view(StudentReportView())
     bot.add_view(GenerateInviteView())
+    bot.add_view(AlgoHCOnboardingLaunchView())
 
     await setup_report_panels()
 
@@ -112,6 +120,17 @@ async def setup_report_panels():
                 guild.text_channels
             )
 
+        onboarding_channel = discord.utils.find(
+            lambda c: "onboarding" in c.name.lower()
+            and getattr(getattr(c, "category", None), "name", "").lower() == ALGO_HC_CATEGORY.lower(),
+            guild.text_channels
+        )
+        if not onboarding_channel:
+            onboarding_channel = discord.utils.find(
+                lambda c: "onboarding" in c.name.lower(),
+                guild.text_channels
+            )
+
         if report_center:
             await ensure_report_center_panel(report_center)
 
@@ -123,6 +142,10 @@ async def setup_report_panels():
             await ensure_generate_invite_panel(invite_channel)
         else:
             print(f"⚠️ Channel '{GENERATE_INVITE_CHANNEL}' tidak ditemukan/tidak dapat diakses bot di guild '{guild.name}'")
+
+        if onboarding_channel:
+            print(f"🔍 Ditemukan channel onboarding: #{onboarding_channel.name}")
+            await ensure_onboarding_panel(onboarding_channel)
 
 async def ensure_report_center_panel(channel):
     async for message in channel.history(limit=20):
@@ -272,25 +295,7 @@ async def on_member_join(member):
 
     await notify_moderators_new_member(member, is_algo_hc=is_algo_hc)
 
-    if is_algo_hc:
-        # Sambut di channel discussion Algo HC
-        hc_discussion = discord.utils.find(
-            lambda c: ("discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL) and getattr(getattr(c, "category", None), "name", "").lower() == ALGO_HC_CATEGORY.lower(),
-            guild.text_channels
-        )
-        if not hc_discussion:
-            hc_discussion = discord.utils.find(
-                lambda c: "discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL,
-                guild.text_channels
-            )
-
-        if hc_discussion:
-            welcome_hc_msg = f"Halo {member.mention}! 👋 Selamat datang di **Algo HC 2026**! Yuk langsung sapa teman-teman dan mulai diskusi santai di sini yaa 😄"
-            try:
-                await hc_discussion.send(welcome_hc_msg)
-            except Exception as e:
-                print(f"❌ Gagal kirim welcome di channel Algo HC: {e}")
-    else:
+    if not is_algo_hc:
         intro_channel = discord.utils.get(guild.text_channels, name="kenalan-dulu")
         if not intro_channel:
             intro_channel = discord.utils.find(lambda c: "kenalan" in c.name.lower(), guild.text_channels)

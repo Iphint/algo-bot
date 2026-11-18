@@ -41,22 +41,28 @@ class GenerateInviteView(View):
             await interaction.followup.send("❌ Error: Perintah harus dijalankan di server.", ephemeral=True)
             return
 
-        # Cari channel discussion Algo HC
+        # Cari channel landing Algo HC (prioritaskan #onboarding, fallback ke #discussion)
         hc_channel = discord.utils.find(
-            lambda c: ("discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL)
+            lambda c: "onboarding" in c.name.lower()
             and getattr(getattr(c, "category", None), "name", "").lower() == ALGO_HC_CATEGORY.lower(),
             guild.text_channels
         )
         if not hc_channel:
             hc_channel = discord.utils.find(
-                lambda c: "discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL,
+                lambda c: ("discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL)
+                and getattr(getattr(c, "category", None), "name", "").lower() == ALGO_HC_CATEGORY.lower(),
+                guild.text_channels
+            )
+        if not hc_channel:
+            hc_channel = discord.utils.find(
+                lambda c: "onboarding" in c.name.lower() or "discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL,
                 guild.text_channels
             )
 
         if not hc_channel:
             await interaction.followup.send(
-                f"❌ Channel discussion untuk kategori `{ALGO_HC_CATEGORY}` tidak ditemukan. "
-                f"Pastikan channel `{ALGO_HC_DISCUSSION_CHANNEL}` sudah ada di server.",
+                f"❌ Channel onboarding atau discussion untuk kategori `{ALGO_HC_CATEGORY}` tidak ditemukan. "
+                f"Pastikan channel `#onboarding` sudah ada di server.",
                 ephemeral=True
             )
             return
@@ -79,11 +85,12 @@ class GenerateInviteView(View):
                     f"🔗 **Link Undangan:**\n`{invite.url}`\n\n"
                     f"📍 **Target Channel:** {hc_channel.mention}\n"
                     f"🏷️ **Auto Role:** `{ALGO_HC_ROLE}`\n\n"
-                    f"📋 **Hak Akses Member Baru:**\n"
-                    f"• Otomatis **HANYA** mendapatkan role `{ALGO_HC_ROLE}`.\n"
-                    f"• **Hanya bisa mengakses 2 channel** di kategori `{ALGO_HC_CATEGORY}`.\n"
-                    f"• **Tidak bisa melihat** `#main-chat` maupun channel reguler lainnya.\n\n"
-                    f"*(Link ini permanen dan dapat langsung dibagikan ke siswa Algo HC)*"
+                    f"📋 **Alur Bergabung Member Baru (Option B):**\n"
+                    f"• Otomatis mendarat di {hc_channel.mention} dengan role `{ALGO_HC_ROLE}`.\n"
+                    f"• Mengisi formulir onboarding (Parent / Student, alasan, lomba).\n"
+                    f"• Setelah submit, mendapatkan role Parent/Student dan membuka akses ke channel diskusi & pengumuman!\n"
+                    f"• **Tidak bisa melihat** channel reguler lainnya.\n\n"
+                    f"*(Link ini permanen dan dapat langsung dibagikan ke siswa/parent Algo HC)*"
                 ),
                 color=0x2ecc71
             )

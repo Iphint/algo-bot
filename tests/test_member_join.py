@@ -85,9 +85,8 @@ def test_on_member_join_assigns_algo_hc_via_hc_invite():
 
     # Verify Algo HC role was given and NOT verified_role
     member.add_roles.assert_awaited_once_with(hc_role, reason="Auto assign Algo HC 2026 role via Algo HC invite")
-    # Verify welcome was sent to discussion channel
-    hc_discussion.send.assert_awaited_once()
-    assert "Algo HC 2026" in hc_discussion.send.call_args[0][0]
+    # In Option B: member lands in #onboarding first, discussion is not spammed on join
+    hc_discussion.send.assert_not_called()
     # Verify moderator notified with is_algo_hc=True
     mock_notify.assert_awaited_once_with(member, is_algo_hc=True)
 
@@ -131,13 +130,21 @@ def test_is_algo_hc_invite_detection():
 
 def test_auto_lock_algohc_command():
     from discord_bot.commands import auto_lock_algohc
+    from config import ROLE_PARENT, ROLE_STUDENT
 
     algo_role = MagicMock()
     algo_role.name = ALGO_HC_ROLE
 
+    parent_role = MagicMock()
+    parent_role.name = ROLE_PARENT
+
+    student_role = MagicMock()
+    student_role.name = ROLE_STUDENT
+
     hc_category = MagicMock()
     hc_category.name = "Algo HC 2026"
     hc_category.set_permissions = AsyncMock()
+    hc_category.text_channels = []
 
     regular_category = MagicMock()
     regular_category.name = "Public Chat"
@@ -145,7 +152,8 @@ def test_auto_lock_algohc_command():
     regular_category.channels = []
 
     guild = MagicMock()
-    guild.roles = [algo_role]
+    guild.default_role = MagicMock()
+    guild.roles = [algo_role, parent_role, student_role]
     guild.categories = [hc_category, regular_category]
     guild.text_channels = []
 
@@ -155,5 +163,13 @@ def test_auto_lock_algohc_command():
 
     asyncio.run(auto_lock_algohc._callback(ctx))
 
-    hc_category.set_permissions.assert_awaited_once_with(algo_role, view_channel=True, send_messages=True)
-    regular_category.set_permissions.assert_awaited_once_with(algo_role, view_channel=False)
+    # HC category permitted for algo_role
+    assert any(
+        call_args[0] == (algo_role,) and call_args[1].get("view_channel") is True
+        for call_args in hc_category.set_permissions.call_args_list
+    )
+    # Regular category locked for algo_role
+    assert any(
+        call_args[0] == (algo_role,) and call_args[1].get("view_channel") is False
+        for call_args in regular_category.set_permissions.call_args_list
+    )

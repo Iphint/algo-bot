@@ -4,7 +4,17 @@ from discord_bot.bot import bot
 from services.google_sheet import (
     get_user_log_status,
 )
-from config import VERIFIED_ROLE, ALGO_HC_ROLE, ALGO_HC_CATEGORY, ALGO_HC_DISCUSSION_CHANNEL
+from config import (
+    VERIFIED_ROLE,
+    ALGO_HC_ROLE,
+    ALGO_HC_CATEGORY,
+    ALGO_HC_DISCUSSION_CHANNEL,
+    ALGO_HC_ANNOUNCEMENT_CHANNEL,
+    ALGO_HC_ONBOARDING_CHANNEL,
+    ROLE_PARENT,
+    ROLE_STUDENT,
+)
+from discord_bot.onboarding_ui import get_or_create_role, ensure_onboarding_panel
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -37,18 +47,26 @@ async def recheck(ctx):
 @commands.has_permissions(administrator=True)
 async def create_hc_invite(ctx):
     guild = ctx.guild
+    # Prioritaskan #onboarding, fallback ke discussion
     hc_channel = discord.utils.find(
-        lambda c: ("discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL) and getattr(getattr(c, "category", None), "name", "").lower() == ALGO_HC_CATEGORY.lower(),
+        lambda c: "onboarding" in c.name.lower()
+        and getattr(getattr(c, "category", None), "name", "").lower() == ALGO_HC_CATEGORY.lower(),
         guild.text_channels
     )
     if not hc_channel:
         hc_channel = discord.utils.find(
-            lambda c: "discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL,
+            lambda c: ("discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL)
+            and getattr(getattr(c, "category", None), "name", "").lower() == ALGO_HC_CATEGORY.lower(),
+            guild.text_channels
+        )
+    if not hc_channel:
+        hc_channel = discord.utils.find(
+            lambda c: "onboarding" in c.name.lower() or "discussion" in c.name.lower() or c.name == ALGO_HC_DISCUSSION_CHANNEL,
             guild.text_channels
         )
 
     if not hc_channel:
-        await ctx.send(f"❌ Channel discussion untuk kategori `{ALGO_HC_CATEGORY}` tidak ditemukan.")
+        await ctx.send(f"❌ Channel onboarding atau discussion untuk kategori `{ALGO_HC_CATEGORY}` tidak ditemukan.")
         return
 
     try:
@@ -65,10 +83,13 @@ async def create_hc_invite(ctx):
         await ctx.send(
             f"✅ **Link Invite Algo HC 2026 Berhasil Dibuat!**\n\n"
             f"🔗 **Link:** {invite.url}\n"
-            f"📍 **Target Channel:** {hc_channel.mention}\n"
-            f"🏷️ **Auto Role:** `{ALGO_HC_ROLE}`\n\n"
-            f"ℹ️ Siapa pun yang bergabung via link ini otomatis hanya mendapatkan role `{ALGO_HC_ROLE}` "
-            f"dan hanya bisa mengakses 2 channel Algo HC."
+            f"📍 **Target Landing:** {hc_channel.mention}\n"
+            f"🏷️ **Auto Role Awal:** `{ALGO_HC_ROLE}`\n\n"
+            f"📋 **Alur Onboarding (Option B):**\n"
+            f"• Member baru masuk dan hanya melihat {hc_channel.mention}.\n"
+            f"• Mengisi formulir status (Parent / Student), alasan join, dan konfirmasi lomba.\n"
+            f"• Setelah submit, mendapatkan role `{ROLE_PARENT}` atau `{ROLE_STUDENT}` dan "
+            f"otomatis membuka channel discussion & announcement!"
         )
     except Exception as e:
         await ctx.send(f"❌ Gagal membuat link invite Algo HC: {e}")
@@ -88,32 +109,92 @@ async def register_hc_invite(ctx, invite_input: str):
 @bot.command(aliases=["lock_algohc"])
 @commands.has_permissions(administrator=True)
 async def auto_lock_algohc(ctx):
-    """Otomatis mengunci/menyembunyikan semua kategori & channel selain Algo HC dari role Algo HC 2026."""
+    """Otomatis mengunci kategori reguler dan menata permission onboarding Option B untuk Algo HC 2026."""
     guild = ctx.guild
     algo_role = discord.utils.get(guild.roles, name=ALGO_HC_ROLE)
     if not algo_role:
         await ctx.send(f"❌ Role `{ALGO_HC_ROLE}` tidak ditemukan di server.")
         return
 
-    await ctx.send(f"⏳ Sedang mengunci semua kategori & channel dari role `{ALGO_HC_ROLE}` secara otomatis...")
+    # Pastikan role Parent & Student tersedia
+    parent_role = await get_or_create_role(guild, ROLE_PARENT, "parent")
+    student_role = await get_or_create_role(guild, ROLE_STUDENT, "student")
+    verified_role = discord.utils.get(guild.roles, name=VERIFIED_ROLE)
+
+    await ctx.send(
+        f"⏳ Sedang menata permission kategori & channel Algo HC 2026 (Option B: Onboarding Gating)...\n"
+        f"• Role Algo: `{algo_role.name}`\n"
+        f"• Role Parent: `{parent_role.name if parent_role else 'Belum ada'}`\n"
+        f"• Role Student: `{student_role.name if student_role else 'Belum ada'}`"
+    )
 
     count_categories = 0
     count_channels = 0
+    configured_hc_channels = []
 
-    # 1. Kunci pada level kategori (dan channel yang unsynced di dalamnya)
+    # 1. Tata level Kategori
     for category in guild.categories:
         cat_name = category.name.lower()
         if "algo hc" in cat_name or "algohc" in cat_name:
-            # Pastikan kategori Algo HC diizinkan
+            # Pastikan kategori Algo HC diizinkan untuk dilihat oleh Algo HC role
             try:
-                await category.set_permissions(algo_role, view_channel=True, send_messages=True)
+                await category.set_permissions(guild.default_role, view_channel=False)
+                await category.set_permissions(algo_role, view_channel=True)
             except Exception as e:
                 print(f"⚠️ Gagal set permission kategori {category.name}: {e}")
+
+            # Konfigurasi channel di dalam kategori Algo HC
+            for ch in category.text_channels:
+                ch_name = ch.name.lower()
+                try:
+                    if "onboarding" in ch_name:
+                        # #onboarding: Dilihat role Algo HC, tapi read-only (tombol interaction tetap berfungsi)
+                        await ch.set_permissions(guild.default_role, view_channel=False)
+                        await ch.set_permissions(
+                            algo_role,
+                            view_channel=True,
+                            send_messages=False,
+                            read_message_history=True,
+                            add_reactions=False
+                        )
+                        # Pasang panel onboarding jika belum ada
+                        await ensure_onboarding_panel(ch)
+                        configured_hc_channels.append(f"#{ch.name} (Onboarding Landing - Read Only)")
+
+                    elif "discussion" in ch_name:
+                        # #discussion: TERKUNCI untuk Algo HC alone. DIBUKA setelah dapat role Parent / Student!
+                        await ch.set_permissions(guild.default_role, view_channel=False)
+                        await ch.set_permissions(algo_role, view_channel=False)
+                        if parent_role:
+                            await ch.set_permissions(parent_role, view_channel=True, send_messages=True, read_message_history=True)
+                        if student_role:
+                            await ch.set_permissions(student_role, view_channel=True, send_messages=True, read_message_history=True)
+                        if verified_role:
+                            await ch.set_permissions(verified_role, view_channel=True, send_messages=True, read_message_history=True)
+                        configured_hc_channels.append(f"#{ch.name} (Discussion - Unlocked via Onboarding)")
+
+                    elif "announc" in ch_name:
+                        # #announcements: TERKUNCI untuk Algo HC alone. DIBUKA (read-only) setelah dapat role Parent / Student!
+                        await ch.set_permissions(guild.default_role, view_channel=False)
+                        await ch.set_permissions(algo_role, view_channel=False)
+                        if parent_role:
+                            await ch.set_permissions(parent_role, view_channel=True, send_messages=False, read_message_history=True)
+                        if student_role:
+                            await ch.set_permissions(student_role, view_channel=True, send_messages=False, read_message_history=True)
+                        if verified_role:
+                            await ch.set_permissions(verified_role, view_channel=True, send_messages=False, read_message_history=True)
+                        configured_hc_channels.append(f"#{ch.name} (Announcements - Unlocked via Onboarding)")
+
+                except Exception as e:
+                    print(f"⚠️ Gagal set permission channel {ch.name}: {e}")
+
             continue
 
-        # Kunci kategori lain
+        # Kunci kategori lain dari role Algo HC (dan Parent agar tidak melihat channel kelas reguler)
         try:
             await category.set_permissions(algo_role, view_channel=False)
+            if parent_role:
+                await category.set_permissions(parent_role, view_channel=False)
             count_categories += 1
         except Exception as e:
             print(f"⚠️ Gagal set permission kategori {category.name}: {e}")
@@ -123,6 +204,8 @@ async def auto_lock_algohc(ctx):
             if hasattr(ch, "permissions_synced") and not ch.permissions_synced:
                 try:
                     await ch.set_permissions(algo_role, view_channel=False)
+                    if parent_role:
+                        await ch.set_permissions(parent_role, view_channel=False)
                     count_channels += 1
                 except Exception:
                     pass
@@ -134,14 +217,23 @@ async def auto_lock_algohc(ctx):
             if "algo" not in c_name and "hc" not in c_name:
                 try:
                     await channel.set_permissions(algo_role, view_channel=False)
+                    if parent_role:
+                        await channel.set_permissions(parent_role, view_channel=False)
                     count_channels += 1
                 except Exception:
                     pass
 
+    channels_summary = "\n".join([f"• {c}" for c in configured_hc_channels]) or "Tidak ada channel yang terdeteksi di kategori Algo HC."
+
     await ctx.send(
-        f"✅ **Selesai!** Berhasil mengunci **{count_categories} kategori** dan **{count_channels} channel** "
-        f"dari role `{ALGO_HC_ROLE}`.\n\n"
-        f"Sekarang siswa dengan role `{ALGO_HC_ROLE}` dijamin **hanya bisa melihat kategori & channel Algo HC 2026**!"
+        f"✅ **Selesai Menata Permission Algo HC 2026 (Option B)!**\n\n"
+        f"🔒 **Kategori & Channel Reguler yang Dikunci:** {count_categories} kategori, {count_channels} channel.\n\n"
+        f"⚙️ **Status Channel Algo HC 2026:**\n{channels_summary}\n\n"
+        f"🎯 **Hasil:**\n"
+        f"1. Member baru join via link Algo HC $\\rightarrow$ **hanya melihat `#onboarding`**.\n"
+        f"2. Member klik **Mulai Onboarding** $\\rightarrow$ pilih Parent/Student, isi alasan & lomba.\n"
+        f"3. Member submit $\\rightarrow$ role `{ROLE_PARENT}` atau `{ROLE_STUDENT}` diberikan, "
+        f"dan channel discussion & announcement langsung terbuka secara instan!"
     )
 
 @bot.command()
@@ -151,6 +243,14 @@ async def setup_invite_panel(ctx):
     from discord_bot.invite_ui import ensure_generate_invite_panel
     await ensure_generate_invite_panel(ctx.channel)
     await ctx.send("✅ Panel generator invite berhasil dipasang di channel ini!", delete_after=5)
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def setup_onboarding_panel(ctx):
+    """Deploy panel onboarding Algo HC ke channel saat ini."""
+    from discord_bot.onboarding_ui import ensure_onboarding_panel
+    await ensure_onboarding_panel(ctx.channel)
+    await ctx.send("✅ Panel onboarding berhasil dipasang di channel ini!", delete_after=5)
 
 @bot.command()
 @commands.has_any_role("Moderator", "Administrator")

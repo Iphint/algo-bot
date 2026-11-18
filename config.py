@@ -43,6 +43,9 @@ ALGO_HC_ROLE = "Algo HC 2026"
 ALGO_HC_CATEGORY = "Algo HC 2026"
 ALGO_HC_DISCUSSION_CHANNEL = "💬・discussion"
 ALGO_HC_ANNOUNCEMENT_CHANNEL = "📢・announcements"
+ALGO_HC_ONBOARDING_CHANNEL = "onboarding"
+ROLE_PARENT = "👨‍👩‍👧・Parent"
+ROLE_STUDENT = "🎓・Student"
 ALGO_HC_INVITE_CODES = [c.strip() for c in os.getenv("ALGO_HC_INVITE_CODES", "").split(",") if c.strip()]
 
 # Spam filter config
