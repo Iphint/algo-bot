@@ -199,19 +199,20 @@ async def auto_lock_algohc(ctx):
         except Exception as e:
             print(f"⚠️ Gagal set permission kategori {category.name}: {e}")
 
-        # Pastikan channel unsynced di dalamnya juga terkunci
+        # Kunci SEMUA channel di dalam kategori ini secara eksplisit (text, voice, dll.)
         for ch in category.channels:
-            if hasattr(ch, "permissions_synced") and not ch.permissions_synced:
-                try:
-                    await ch.set_permissions(algo_role, view_channel=False)
-                    if parent_role:
-                        await ch.set_permissions(parent_role, view_channel=False)
-                    count_channels += 1
-                except Exception:
-                    pass
+            try:
+                await ch.set_permissions(algo_role, view_channel=False)
+                if parent_role:
+                    await ch.set_permissions(parent_role, view_channel=False)
+                count_channels += 1
+            except Exception as e:
+                print(f"⚠️ Gagal set permission channel {ch.name}: {e}")
 
-    # 2. Kunci channel-channel mandiri yang tidak berada di bawah kategori apa pun
-    for channel in guild.text_channels:
+    # 2. Kunci semua channel mandiri yang tidak berada di bawah kategori apa pun
+    for channel in guild.channels:
+        if isinstance(channel, discord.CategoryChannel):
+            continue
         if channel.category is None:
             c_name = channel.name.lower()
             if "algo" not in c_name and "hc" not in c_name:

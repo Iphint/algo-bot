@@ -274,6 +274,16 @@ async def on_member_join(member):
     if not member.bot:
         if is_algo_hc:
             algo_role = discord.utils.get(guild.roles, name=ALGO_HC_ROLE)
+            verified_role = discord.utils.get(guild.roles, name=VERIFIED_ROLE)
+
+            # Jika member secara tidak sengaja punya Verified Student, copot
+            if verified_role and verified_role in member.roles:
+                try:
+                    await member.remove_roles(verified_role, reason="Remove verified role for Algo HC member")
+                    print(f"🧹 Role '{VERIFIED_ROLE}' dicopot dari {member.name} karena join via link Algo HC")
+                except Exception as e:
+                    print(f"⚠️ Gagal mencopot role verified dari {member.name}: {e}")
+
             if algo_role:
                 try:
                     await member.add_roles(algo_role, reason="Auto assign Algo HC 2026 role via Algo HC invite")
